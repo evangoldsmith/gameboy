@@ -54,6 +54,7 @@ target_include_directories(gameboy_core PUBLIC ${PROJECT_SOURCE_DIR}/src)
 # ── Frontend executable (SDL2 lives only here) ─────────────────────────────────
 add_executable(gameboy src/main.cpp)
 target_link_libraries(gameboy PRIVATE gameboy_core SDL2::SDL2)
+target_include_directories(gameboy PRIVATE ${SDL2_INCLUDE_DIRS})
 
 # On macOS SDL2 also needs the Cocoa / IOKit frameworks
 if(APPLE)
