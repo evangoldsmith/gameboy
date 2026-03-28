@@ -14,7 +14,7 @@ CMAKE       := cmake
 CMAKE_FLAGS := -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
 BINARY      := gameboy
-ROM         ?=
+ROM         ?= roms/cpu_instrs.gb
 
 # ── Default target ─────────────────────────────────────────────────────────────
 .PHONY: all

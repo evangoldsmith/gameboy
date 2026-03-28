@@ -2,6 +2,7 @@
 #define TYPES_H
 
 #include <cstdint>
+#include <string_view>
 
 enum class Register8 : uint8_t { A, F, B, C, D, E, H, L };
 
@@ -23,5 +24,16 @@ enum class PPUMode : uint8_t {
 };
 
 enum class MBCType : uint8_t { None, MBC1, MBC2, MBC3, MBC5 };
+
+constexpr std::string_view mbcTypeName(MBCType t) {
+    switch (t) {
+        case MBCType::None: return "ROM Only";
+        case MBCType::MBC1: return "MBC1";
+        case MBCType::MBC2: return "MBC2";
+        case MBCType::MBC3: return "MBC3";
+        case MBCType::MBC5: return "MBC5";
+    }
+    return "Unknown";
+}
 
 #endif // TYPES_H

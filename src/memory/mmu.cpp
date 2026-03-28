@@ -1,1 +1,101 @@
 #include "mmu.h"
+
+MMU::MMU(Cartridge& cart) : m_cart(cart) {}
+
+uint8_t MMU::read(uint16_t addr) const {
+    // $0000–$7FFF: Cartridge ROM
+    if (addr < 0x8000)
+        return m_cart.read(addr);
+
+    // $8000–$9FFF: VRAM
+    if (addr < 0xA000)
+        return m_vram[addr - 0x8000];
+
+    // $A000–$BFFF: External RAM (cartridge)
+    if (addr < 0xC000)
+        return m_cart.read(addr);
+
+    // $C000–$DFFF: WRAM
+    if (addr < 0xE000)
+        return m_wram[addr - 0xC000];
+
+    // $E000–$FDFF: Echo RAM (mirror of $C000–$DDFF)
+    if (addr < 0xFE00)
+        return m_wram[addr - 0xE000];
+
+    // $FE00–$FE9F: OAM
+    if (addr < 0xFEA0)
+        return m_oam[addr - 0xFE00];
+
+    // $FEA0–$FEFF: Unusable
+    if (addr < 0xFF00)
+        return 0xFF;
+
+    // $FF00–$FF7F: I/O registers
+    if (addr < 0xFF80)
+        return m_io[addr - 0xFF00];
+
+    // $FF80–$FFFE: HRAM
+    if (addr < 0xFFFF)
+        return m_hram[addr - 0xFF80];
+
+    // $FFFF: IE register
+    return m_ie;
+}
+
+void MMU::write(uint16_t addr, uint8_t val) {
+    // $0000–$7FFF: Cartridge (MBC register writes)
+    if (addr < 0x8000) {
+        m_cart.write(addr, val);
+        return;
+    }
+
+    // $8000–$9FFF: VRAM
+    if (addr < 0xA000) {
+        m_vram[addr - 0x8000] = val;
+        return;
+    }
+
+    // $A000–$BFFF: External RAM (cartridge)
+    if (addr < 0xC000) {
+        m_cart.write(addr, val);
+        return;
+    }
+
+    // $C000–$DFFF: WRAM
+    if (addr < 0xE000) {
+        m_wram[addr - 0xC000] = val;
+        return;
+    }
+
+    // $E000–$FDFF: Echo RAM
+    if (addr < 0xFE00) {
+        m_wram[addr - 0xE000] = val;
+        return;
+    }
+
+    // $FE00–$FE9F: OAM
+    if (addr < 0xFEA0) {
+        m_oam[addr - 0xFE00] = val;
+        return;
+    }
+
+    // $FEA0–$FEFF: Unusable — ignore writes
+    if (addr < 0xFF00)
+        return;
+
+    // $FF00–$FF7F: I/O registers
+    if (addr < 0xFF80) {
+        m_io[addr - 0xFF00] = val;
+        return;
+    }
+
+    // $FF80–$FFFE: HRAM
+    if (addr < 0xFFFF) {
+        m_hram[addr - 0xFF80] = val;
+        return;
+    }
+
+    // $FFFF: IE register
+    m_ie = val;
+}

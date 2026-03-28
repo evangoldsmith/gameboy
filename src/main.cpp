@@ -1,19 +1,47 @@
+#include "cartridge/cartridge.h"
+#include "memory/mmu.h"
 #include <SDL2/SDL.h>
 #include <cstdlib>
 #include <iostream>
+#include <string>
 
 static constexpr int GB_WIDTH  = 160;
 static constexpr int GB_HEIGHT = 144;
 static constexpr int SCALE     = 4;
 
-int main() {
+
+int main(int argc, char* argv[]) {
+    if (argc < 2) {
+        std::cerr << "Usage: gameboy <rom.gb>\n";
+        return EXIT_FAILURE;
+    }
+
+    // TODO: Maybe seperate cartridge initialization into seperate func
+    Cartridge cart = [&]() -> Cartridge {
+        try {
+            return Cartridge::load(argv[1]);
+        } catch (const std::exception& e) {
+            std::cerr << "Error loading ROM: " << e.what() << "\n";
+            std::exit(EXIT_FAILURE);
+        }
+    }();
+
+    const auto& hdr = cart.header();
+    std::cout << "Title:    " << hdr.title << "\n"
+              << "MBC:      " << mbcTypeName(hdr.mbcType) << "\n"
+              << "ROM size: " << hdr.romBytes / 1024 << " KB\n"
+              << "RAM size: " << hdr.ramBytes / 1024 << " KB\n";
+
+    MMU mmu(cart);
+
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
         std::cerr << "SDL_Init error: " << SDL_GetError() << "\n";
         return EXIT_FAILURE;
     }
 
+    std::string windowTitle = "Game Boy — " + hdr.title;
     SDL_Window* window = SDL_CreateWindow(
-        "Game Boy",
+        windowTitle.c_str(),
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         GB_WIDTH * SCALE, GB_HEIGHT * SCALE,
         SDL_WINDOW_SHOWN

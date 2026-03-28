@@ -38,6 +38,7 @@ endif()
 # ── Core emulator library (zero SDL dependency) ────────────────────────────────
 add_library(gameboy_core STATIC
     src/gameboy.cpp
+    src/cartridge/cartridge.cpp
     src/cpu/cpu.cpp
     src/cpu/opcodes.cpp
     src/memory/mmu.cpp
