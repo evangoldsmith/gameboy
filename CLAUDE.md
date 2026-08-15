@@ -27,24 +27,51 @@ The project splits into two compilation units:
 
 ### Component Map
 
-| Component | Path | Responsibility |
-|-----------|------|----------------|
-| CPU | `src/cpu/` | LR35902 instruction execution (`cpu.cpp`, `opcodes.cpp`) |
-| MMU | `src/memory/mmu.cpp` | Memory address space, ROM/RAM banking |
-| PPU | `src/ppu/ppu.cpp` | Tile/sprite rendering, VRAM, frame buffer |
-| APU | `src/apu/apu.cpp` | 4-channel audio synthesis |
-| Timer | `src/timer.cpp` | Internal timing and interrupt generation |
-| Joypad | `src/joypad.cpp` | Button input |
-| Serial | `src/serial.cpp` | Link cable serial I/O |
-| Cartridge | `src/cartridge/cartridge.h` | ROM loading, MBC handling |
-| Logger | `src/debug/logger.cpp` | Debug logging |
-| GameBoy | `src/gameboy.cpp` | Top-level system class wiring all components |
-| Main | `src/main.cpp` | SDL2 frontend entry point |
+| Component | Path | Docs | Responsibility |
+|-----------|------|------|----------------|
+| CPU | `src/cpu/` | [cpu.md](docs/cpu.md) | LR35902 instruction execution (`cpu.cpp`, `opcodes.cpp`) |
+| MMU | `src/memory/mmu.cpp` | [mmu.md](docs/mmu.md) | Memory address space, ROM/RAM banking |
+| PPU | `src/ppu/ppu.cpp` | [ppu.md](docs/ppu.md) | Tile/sprite rendering, VRAM, frame buffer |
+| APU | `src/apu/apu.cpp` | [apu.md](docs/apu.md) | 4-channel audio synthesis |
+| Timer | `src/timer.cpp` | [timer.md](docs/timer.md) | Internal timing and interrupt generation |
+| Joypad | `src/joypad.cpp` | [joypad.md](docs/joypad.md) | Button input |
+| Serial | `src/serial.cpp` | [serial.md](docs/serial.md) | Link cable serial I/O |
+| Cartridge | `src/cartridge/cartridge.h` | [cartridge.md](docs/cartridge.md) | ROM loading, MBC handling |
+| Logger | `src/debug/logger.cpp` | [logger.md](docs/logger.md) | Debug logging |
+| GameBoy | `src/gameboy.cpp` | [gameboy.md](docs/gameboy.md) | Top-level system class wiring all components |
+| Main | `src/main.cpp` | [main.md](docs/main.md) | SDL2 frontend entry point |
 
 The `GameBoy` class in `src/gameboy.h` is the central orchestrator — it owns all subsystem instances and drives the main emulation loop.
 
+## Documentation
+
+`docs/` holds one Markdown file per component, indexed by `docs/README.md` and linked from the table above. Each covers responsibility, public API, how the logic actually works, current state, and an explicit "Not implemented yet" list.
+
+**Keep `docs/` in sync as part of the same change that alters the code — not as a follow-up.** Specifically:
+
+- Changing a public method signature or adding one → update that component's **Public API** section.
+- Changing how something works → update the corresponding **How it works** prose. Doc statements about *why* a piece of logic exists (initialisation order, active-low bits, read-and-clear IRQ flags) are load-bearing; revise them rather than deleting them.
+- Implementing something listed under **Not implemented yet** → remove that bullet and update **Current state**. If it was a stub file, drop the status banner at the top.
+- Completing a roadmap phase → update **Current state** in every doc it touched, plus the status column in `docs/README.md`.
+- Adding a component → create `docs/<name>.md` following the existing structure, add a row to the component map above and to `docs/README.md`.
+- Changing test results → update the milestone line in `docs/README.md`.
+
+When a doc and the code disagree, the code is right and the doc is a bug.
+
 ## Project State
 
-All component files are currently **stub implementations** (headers and empty `.cpp` files). The executable builds and runs but only prints "Hello, world!". No tests exist yet.
+Roadmap Phases 0–3 are done, plus pieces of 4–9 that were needed to unblock them. **10 of 11 Blargg `cpu_instrs` sub-tests pass**; `02-interrupts` fails pending the Phase 4 timer.
+
+- **Implemented**: full SM83 instruction set, MMU routing with partial I/O dispatch, cartridge header parsing, minimal MBC1, serial output capture, DIV, PPU scanline timing, Game Boy Doctor trace logging.
+- **Stubs**: `apu.{h,cpp}` and `joypad.{h,cpp}` are empty include guards.
+- **Nothing renders yet** — the SDL window is blank green until Phase 6.
+- No tests exist beyond running test ROMs.
+
+Verify the CPU with:
+
+```bash
+make release
+./build/release/gameboy roms/cpu_instrs.gb --doctor 250000000 > /dev/null
+```
 
 C++20 with `-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion` — keep code warning-clean.
