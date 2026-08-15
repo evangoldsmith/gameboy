@@ -59,6 +59,9 @@ registers nothing responds to yet.
 | `$FF01` SB | `Serial::readSB()` | `Serial::writeSB()` |
 | `$FF02` SC | `Serial::readSC()` | `Serial::writeSC()` — triggers the transfer |
 | `$FF04` DIV | `Timer::div()` | `Timer::resetDiv()` — any value resets it |
+| `$FF05` TIMA | `Timer::tima()` | `Timer::writeTima()` — cancels a pending overflow |
+| `$FF06` TMA | `Timer::tma()` | `Timer::writeTma()` |
+| `$FF07` TAC | `Timer::tac()` | `Timer::writeTac()` — can trigger a TIMA edge |
 | `$FF0F` IF | `m_io` with the top 3 bits forced to 1 | `m_io` |
 | `$FF41` STAT | `PPU::stat()` | `m_io` |
 | `$FF44` LY | `PPU::ly()` | ignored (read-only) |

@@ -74,6 +74,7 @@ Peripherals do not request interrupts themselves. Each exposes a read-and-clear
 
 ```cpp
 if (m_ppu.takeVBlankIrq()) requestInterrupt(Interrupt::VBlank);
+if (m_timer.takeIrq())     requestInterrupt(Interrupt::Timer);
 if (m_serial.takeIrq())    requestInterrupt(Interrupt::Serial);
 ```
 

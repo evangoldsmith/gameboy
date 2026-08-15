@@ -5,6 +5,9 @@ namespace {
 constexpr uint16_t REG_SB   = 0xFF01;  // Serial transfer data
 constexpr uint16_t REG_SC   = 0xFF02;  // Serial transfer control
 constexpr uint16_t REG_DIV  = 0xFF04;  // Divider
+constexpr uint16_t REG_TIMA = 0xFF05;  // Timer counter
+constexpr uint16_t REG_TMA  = 0xFF06;  // Timer modulo
+constexpr uint16_t REG_TAC  = 0xFF07;  // Timer control
 constexpr uint16_t REG_IF   = 0xFF0F;  // Interrupt flags
 constexpr uint16_t REG_STAT = 0xFF41;  // LCD status
 constexpr uint16_t REG_LY   = 0xFF44;  // LCD Y coordinate
@@ -120,6 +123,9 @@ uint8_t MMU::readIO(uint16_t addr) {
         case REG_SB:   return m_serial.readSB();
         case REG_SC:   return m_serial.readSC();
         case REG_DIV:  return m_timer.div();
+        case REG_TIMA: return m_timer.tima();
+        case REG_TMA:  return m_timer.tma();
+        case REG_TAC:  return m_timer.tac();
         case REG_IF:   return static_cast<uint8_t>(m_io[REG_IF - 0xFF00] | 0xE0);
         case REG_STAT: return m_ppu.stat();
         case REG_LY:   return m_ppu.ly();
@@ -131,8 +137,11 @@ void MMU::writeIO(uint16_t addr, uint8_t val) {
     switch (addr) {
         case REG_SB:  m_serial.writeSB(val); break;
         case REG_SC:  m_serial.writeSC(val); break;
-        case REG_DIV: m_timer.resetDiv();    break;  // any write resets it
-        case REG_LY:  break;                         // read-only
+        case REG_DIV:  m_timer.resetDiv();     break;  // any write resets it
+        case REG_TIMA: m_timer.writeTima(val); break;
+        case REG_TMA:  m_timer.writeTma(val);  break;
+        case REG_TAC:  m_timer.writeTac(val);  break;
+        case REG_LY:   break;                          // read-only
         default:      m_io[addr - 0xFF00] = val; break;
     }
 }

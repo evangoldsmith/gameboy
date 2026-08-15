@@ -60,9 +60,9 @@ When a doc and the code disagree, the code is right and the doc is a bug.
 
 ## Project State
 
-Roadmap Phases 0–3 are done, plus pieces of 4–9 that were needed to unblock them. **10 of 11 Blargg `cpu_instrs` sub-tests pass**; `02-interrupts` fails pending the Phase 4 timer.
+Roadmap Phases 0–5 are done, plus pieces of 6–9 that were needed to unblock them. **All 11 Blargg `cpu_instrs` sub-tests pass.**
 
-- **Implemented**: full SM83 instruction set, MMU routing with partial I/O dispatch, cartridge header parsing, minimal MBC1, serial output capture, DIV, PPU scanline timing, Game Boy Doctor trace logging.
+- **Implemented**: full SM83 instruction set, interrupt dispatch, MMU routing with partial I/O dispatch, cartridge header parsing, minimal MBC1, serial output capture, the full DIV/TIMA timer, PPU scanline timing, Game Boy Doctor trace logging.
 - **Stubs**: `apu.{h,cpp}` and `joypad.{h,cpp}` are empty include guards.
 - **Nothing renders yet** — the SDL window is blank green until Phase 6.
 - No tests exist beyond running test ROMs.

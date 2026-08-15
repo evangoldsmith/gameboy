@@ -17,6 +17,7 @@ uint8_t GameBoy::step() {
     m_ppu.tick(tcycles);
 
     if (m_ppu.takeVBlankIrq()) requestInterrupt(Interrupt::VBlank);
+    if (m_timer.takeIrq())     requestInterrupt(Interrupt::Timer);
     if (m_serial.takeIrq())    requestInterrupt(Interrupt::Serial);
 
     return tcycles;
