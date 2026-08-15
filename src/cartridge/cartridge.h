@@ -36,8 +36,18 @@ public:
 private:
     Cartridge() = default;
 
+    uint8_t  romByte(std::size_t offset) const;
+    uint32_t romBankCount() const;
+
     std::vector<uint8_t> m_rom;
+    std::vector<uint8_t> m_ram;
     CartridgeHeader      m_header{};
+
+    // Minimal MBC1 state — enough for ROM banking, which is what Blargg's
+    // cpu_instrs needs. Mode 1 banking, MBC2/3/5 and battery saves are Phase 9.
+    uint8_t m_romBank{1};
+    uint8_t m_ramBank{0};
+    bool    m_ramEnabled{false};
 };
 
 #endif // CARTRIDGE_H

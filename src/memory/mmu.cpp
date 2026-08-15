@@ -1,8 +1,19 @@
 #include "mmu.h"
 
-MMU::MMU(Cartridge& cart) : m_cart(cart) {}
+namespace {
+// I/O register addresses handled by a subsystem rather than the flat array.
+constexpr uint16_t REG_SB   = 0xFF01;  // Serial transfer data
+constexpr uint16_t REG_SC   = 0xFF02;  // Serial transfer control
+constexpr uint16_t REG_DIV  = 0xFF04;  // Divider
+constexpr uint16_t REG_IF   = 0xFF0F;  // Interrupt flags
+constexpr uint16_t REG_STAT = 0xFF41;  // LCD status
+constexpr uint16_t REG_LY   = 0xFF44;  // LCD Y coordinate
+}  // namespace
 
-uint8_t MMU::read(uint16_t addr) const {
+MMU::MMU(Cartridge& cart, Serial& serial, Timer& timer, PPU& ppu)
+    : m_cart(cart), m_serial(serial), m_timer(timer), m_ppu(ppu) {}
+
+uint8_t MMU::read(uint16_t addr) {
     // $0000–$7FFF: Cartridge ROM
     if (addr < 0x8000)
         return m_cart.read(addr);
@@ -33,7 +44,7 @@ uint8_t MMU::read(uint16_t addr) const {
 
     // $FF00–$FF7F: I/O registers
     if (addr < 0xFF80)
-        return m_io[addr - 0xFF00];
+        return readIO(addr);
 
     // $FF80–$FFFE: HRAM
     if (addr < 0xFFFF)
@@ -86,7 +97,7 @@ void MMU::write(uint16_t addr, uint8_t val) {
 
     // $FF00–$FF7F: I/O registers
     if (addr < 0xFF80) {
-        m_io[addr - 0xFF00] = val;
+        writeIO(addr, val);
         return;
     }
 
@@ -98,4 +109,30 @@ void MMU::write(uint16_t addr, uint8_t val) {
 
     // $FFFF: IE register
     m_ie = val;
+}
+
+// ── I/O dispatch ─────────────────────────────────────────────────────────────
+// Registers not listed here fall through to the flat array, which is fine for
+// anything nothing reacts to yet.
+
+uint8_t MMU::readIO(uint16_t addr) {
+    switch (addr) {
+        case REG_SB:   return m_serial.readSB();
+        case REG_SC:   return m_serial.readSC();
+        case REG_DIV:  return m_timer.div();
+        case REG_IF:   return static_cast<uint8_t>(m_io[REG_IF - 0xFF00] | 0xE0);
+        case REG_STAT: return m_ppu.stat();
+        case REG_LY:   return m_ppu.ly();
+        default:       return m_io[addr - 0xFF00];
+    }
+}
+
+void MMU::writeIO(uint16_t addr, uint8_t val) {
+    switch (addr) {
+        case REG_SB:  m_serial.writeSB(val); break;
+        case REG_SC:  m_serial.writeSC(val); break;
+        case REG_DIV: m_timer.resetDiv();    break;  // any write resets it
+        case REG_LY:  break;                         // read-only
+        default:      m_io[addr - 0xFF00] = val; break;
+    }
 }

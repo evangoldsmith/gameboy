@@ -2,18 +2,30 @@
 #define MMU_H
 
 #include "../cartridge/cartridge.h"
+#include "../ppu/ppu.h"
+#include "../serial.h"
+#include "../timer.h"
+
 #include <array>
 #include <cstdint>
 
 class MMU {
 public:
-    explicit MMU(Cartridge& cart);
+    MMU(Cartridge& cart, Serial& serial, Timer& timer, PPU& ppu);
 
-    uint8_t read(uint16_t addr) const;
+    // Not const: reads of I/O registers can observe live subsystem state and
+    // will eventually mutate it (the DIV/TIMA edge cases in Phase 4).
+    uint8_t read(uint16_t addr);
     void    write(uint16_t addr, uint8_t val);
 
 private:
+    uint8_t readIO(uint16_t addr);
+    void    writeIO(uint16_t addr, uint8_t val);
+
     Cartridge& m_cart;
+    Serial&    m_serial;
+    Timer&     m_timer;
+    PPU&       m_ppu;
 
     std::array<uint8_t, 0x2000> m_vram{};  // $8000–$9FFF  8 KB
     std::array<uint8_t, 0x2000> m_wram{};  // $C000–$DFFF  8 KB

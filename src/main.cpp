@@ -1,45 +1,48 @@
-#include "cartridge/cartridge.h"
-#include "memory/mmu.h"
+#include "debug/logger.h"
+#include "gameboy.h"
+
 #include <SDL2/SDL.h>
 #include <cstdlib>
 #include <iostream>
 #include <string>
+#include <string_view>
 
-static constexpr int GB_WIDTH  = 160;
-static constexpr int GB_HEIGHT = 144;
-static constexpr int SCALE     = 4;
+namespace {
 
+constexpr int GB_WIDTH  = 160;
+constexpr int GB_HEIGHT = 144;
+constexpr int SCALE     = 4;
 
-int main(int argc, char* argv[]) {
-    if (argc < 2) {
-        std::cerr << "Usage: gameboy <rom.gb>\n";
-        return EXIT_FAILURE;
-    }
-
-    // TODO: Maybe seperate cartridge initialization into seperate func
-    Cartridge cart = [&]() -> Cartridge {
-        try {
-            return Cartridge::load(argv[1]);
-        } catch (const std::exception& e) {
-            std::cerr << "Error loading ROM: " << e.what() << "\n";
-            std::exit(EXIT_FAILURE);
-        }
-    }();
-
-    const auto& hdr = cart.header();
+void printHeader(const CartridgeHeader& hdr) {
     std::cout << "Title:    " << hdr.title << "\n"
               << "MBC:      " << mbcTypeName(hdr.mbcType) << "\n"
               << "ROM size: " << hdr.romBytes / 1024 << " KB\n"
               << "RAM size: " << hdr.ramBytes / 1024 << " KB\n";
+}
 
-    MMU mmu(cart);
+// Headless run that prints a Game Boy Doctor trace line before every
+// instruction. Redirect stdout to a file and diff it against the golden log.
+int runDoctor(GameBoy& gb, long maxSteps) {
+    gb.ppu().setLyStub(true);      // the reference logs were captured this way
+    gb.serial().setEcho(false);    // keep serial output out of the trace
 
+    for (long i = 0; i < maxSteps && !gb.cpu().stopped(); ++i) {
+        std::cout << logger::traceLine(gb.cpu(), gb.mmu()) << "\n";
+        gb.step();
+    }
+
+    std::cout.flush();
+    std::cerr << "\n--- serial output ---\n" << gb.serial().output() << "\n";
+    return EXIT_SUCCESS;
+}
+
+int runSDL(GameBoy& gb, const CartridgeHeader& hdr) {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
         std::cerr << "SDL_Init error: " << SDL_GetError() << "\n";
         return EXIT_FAILURE;
     }
 
-    std::string windowTitle = "Game Boy — " + hdr.title;
+    const std::string windowTitle = "Game Boy — " + hdr.title;
     SDL_Window* window = SDL_CreateWindow(
         windowTitle.c_str(),
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
@@ -92,7 +95,9 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        // TODO: tick emulator, get framebuffer from PPU, upload to texture
+        gb.runFrame();
+
+        // TODO: upload the PPU framebuffer once Phase 6 renders one.
         // SDL_UpdateTexture(texture, nullptr, framebuffer.data(), GB_WIDTH * sizeof(uint32_t));
 
         SDL_SetRenderDrawColor(renderer, 0x9B, 0xBC, 0x0F, 0xFF); // Classic GB green
@@ -106,4 +111,43 @@ int main(int argc, char* argv[]) {
     SDL_DestroyWindow(window);
     SDL_Quit();
     return EXIT_SUCCESS;
+}
+
+}  // namespace
+
+int main(int argc, char* argv[]) {
+    if (argc < 2) {
+        std::cerr << "Usage: gameboy <rom.gb> [--doctor [steps]]\n";
+        return EXIT_FAILURE;
+    }
+
+    bool doctor   = false;
+    long maxSteps = 1'000'000;
+    for (int i = 2; i < argc; ++i) {
+        const std::string_view arg{argv[i]};
+        if (arg == "--doctor") {
+            doctor = true;
+            if (i + 1 < argc) {
+                if (const long n = std::strtol(argv[i + 1], nullptr, 10); n > 0) {
+                    maxSteps = n;
+                    ++i;
+                }
+            }
+        } else {
+            std::cerr << "Unknown option: " << arg << "\n";
+            return EXIT_FAILURE;
+        }
+    }
+
+    try {
+        GameBoy gb(argv[1]);
+
+        if (doctor) return runDoctor(gb, maxSteps);
+
+        printHeader(gb.header());
+        return runSDL(gb, gb.header());
+    } catch (const std::exception& e) {
+        std::cerr << "Error: " << e.what() << "\n";
+        return EXIT_FAILURE;
+    }
 }

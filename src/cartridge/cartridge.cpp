@@ -69,24 +69,78 @@ Cartridge Cartridge::load(const std::string& path) {
         .ramBytes = ramSizeFromByte(cart.m_rom[0x0149]),
     };
 
+    cart.m_ram.assign(cart.m_header.ramBytes, 0);
+
     return cart;
 }
 
 // ── read / write ─────────────────────────────────────────────────────────────
 
+uint32_t Cartridge::romBankCount() const {
+    return m_rom.empty() ? 1u
+                         : static_cast<uint32_t>((m_rom.size() + 0x3FFF) / 0x4000);
+}
+
+uint8_t Cartridge::romByte(std::size_t offset) const {
+    return offset < m_rom.size() ? m_rom[offset] : uint8_t{0xFF};
+}
+
 uint8_t Cartridge::read(uint16_t addr) const {
-    // $0000–$7FFF: ROM (ROM-only: direct index; MBC banking handled later)
+    // $0000–$3FFF: fixed bank 0
+    if (addr < 0x4000)
+        return romByte(addr);
+
+    // $4000–$7FFF: switchable bank
     if (addr < 0x8000) {
-        if (addr < m_rom.size())
-            return m_rom[addr];
-        return 0xFF;
+        const std::size_t bank = m_romBank % romBankCount();
+        return romByte(bank * 0x4000 + (addr - 0x4000));
     }
-    // $A000–$BFFF: external RAM (not wired yet)
+
+    // $A000–$BFFF: external RAM
+    if (addr >= 0xA000 && addr < 0xC000) {
+        if (!m_ramEnabled || m_ram.empty()) return 0xFF;
+        const std::size_t off =
+            (static_cast<std::size_t>(m_ramBank) * 0x2000 + (addr - 0xA000)) % m_ram.size();
+        return m_ram[off];
+    }
+
     return 0xFF;
 }
 
-void Cartridge::write([[maybe_unused]] uint16_t addr,
-                      [[maybe_unused]] uint8_t  val) {
-    // ROM-only cartridges ignore all writes.
-    // MBC register writes will be dispatched here in Phase 9.
+void Cartridge::write(uint16_t addr, uint8_t val) {
+    if (m_header.mbcType == MBCType::None) return;
+
+    // $0000–$1FFF: RAM enable ($0A in the low nibble enables)
+    if (addr < 0x2000) {
+        m_ramEnabled = (val & 0x0F) == 0x0A;
+        return;
+    }
+
+    // $2000–$3FFF: low 5 bits of the ROM bank. Writing 0 selects bank 1 —
+    // the hardware quirk that makes banks $20/$40/$60 unreachable on MBC1.
+    if (addr < 0x4000) {
+        uint8_t bank = static_cast<uint8_t>(val & 0x1F);
+        if (bank == 0) bank = 1;
+        m_romBank = static_cast<uint8_t>((m_romBank & 0x60) | bank);
+        return;
+    }
+
+    // $4000–$5FFF: 2 bits, used as RAM bank or as ROM bank bits 5–6.
+    if (addr < 0x6000) {
+        const uint8_t bits = static_cast<uint8_t>(val & 0x03);
+        m_ramBank = bits;
+        m_romBank = static_cast<uint8_t>((m_romBank & 0x1F) | (bits << 5));
+        return;
+    }
+
+    // $6000–$7FFF: banking mode select. Mode 1 is Phase 9.
+    if (addr < 0x8000) return;
+
+    // $A000–$BFFF: external RAM
+    if (addr >= 0xA000 && addr < 0xC000) {
+        if (!m_ramEnabled || m_ram.empty()) return;
+        const std::size_t off =
+            (static_cast<std::size_t>(m_ramBank) * 0x2000 + (addr - 0xA000)) % m_ram.size();
+        m_ram[off] = val;
+    }
 }
