@@ -52,41 +52,28 @@ constructor is public, so this works.
 
 ## `step()`
 
-The core interleaving:
+```cpp
+uint8_t GameBoy::step() { return m_cpu.step(); }
+```
 
-1. `m_cpu.step()` runs one instruction (or services one interrupt) and returns
-   its T-cycle cost.
-2. `m_timer.tick()` and `m_ppu.tick()` advance by exactly that many cycles.
-3. Pending peripheral interrupts are drained into IF.
+That is the whole thing. Peripherals are **not** advanced here: the CPU ticks
+them one M-cycle at a time from inside each instruction, through `MMU::tick()`.
+Doing it here instead — in a lump after the instruction finished — is what used
+to make `mem_timing` fail. See [mmu.md](mmu.md) and [cpu.md](cpu.md).
 
-Peripherals are advanced **after** the CPU, in a lump equal to the instruction's
-full cost. Real hardware interleaves them cycle by cycle. This is invisible to
-`cpu_instrs` and to games, but it is the reason `mem_timing` and the Mealybug
-tests cannot pass — see [cpu.md](cpu.md) for the same caveat on the CPU side.
-
-Because peripherals are ticked from the returned cycle count, they keep running
-while the CPU is halted: `CPU::step()` returns 4 cycles per halted step rather
-than zero, so the PPU still reaches VBlank and wakes it.
+Peripherals keep running while the CPU is halted, because `CPU::step()` ticks 4
+cycles per halted step rather than returning zero. That is what eventually
+produces the interrupt that wakes it.
 
 ## Interrupt routing
 
-`requestInterrupt(Interrupt)` sets the matching bit in IF (`$FF0F`) via the MMU.
-The `Interrupt` enum in `types.h` doubles as the bit index, so the mask is
-`1 << static_cast<uint8_t>(which)`.
+Interrupts are raised in `MMU::tick()`, again so that one raised mid-instruction
+is visible to a later access within that same instruction.
 
 Peripherals do not request interrupts themselves. Each exposes a read-and-clear
-`takeIrq()`-style method that `step()` drains:
-
-```cpp
-if (m_ppu.takeVBlankIrq()) requestInterrupt(Interrupt::VBlank);
-if (m_ppu.takeStatIrq())   requestInterrupt(Interrupt::LCDStat);
-if (m_timer.takeIrq())     requestInterrupt(Interrupt::Timer);
-if (m_serial.takeIrq())    requestInterrupt(Interrupt::Serial);
-if (m_joypad.takeIrq())    requestInterrupt(Interrupt::Joypad);
-```
-
-This keeps dependencies one-directional — no peripheral needs an MMU reference,
-so there is no cycle in the object graph.
+`takeIrq()`-style method that the MMU drains, which keeps dependencies
+one-directional — no peripheral needs an MMU reference, so there is no cycle in
+the object graph.
 
 ## `runFrame()`
 

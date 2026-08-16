@@ -69,6 +69,54 @@ that `PUSH`/`POP` use a *different* mapping where index 3 is `AF` instead of
 `SP`, so those four opcodes are written out longhand rather than going through
 `readR16`.
 
+## Cycle accounting
+
+Time is spent **one M-cycle at a time from inside the instruction**, not
+totalled up afterwards. Every M-cycle — memory access or internal operation —
+goes through `tick()`, which forwards to `MMU::tick()` and advances the timer,
+PPU and APU:
+
+```cpp
+void CPU::tick(uint8_t tcycles) {
+    m_stepCycles += tcycles;
+    m_mmu.tick(tcycles);
+}
+uint8_t CPU::read8(uint16_t addr)  { tick(4); return m_mmu.read(addr); }
+void    CPU::write8(uint16_t a, uint8_t v) { tick(4); m_mmu.write(a, v); }
+```
+
+The tick comes *before* the access because on hardware the access lands on the
+last cycle of its M-cycle. That ordering is what `mem_timing` measures.
+
+Instructions with internal cycles pay them explicitly — `INC rr` and `ADD HL,rr`
+each add one, `PUSH` and `RST` spend one decrementing SP before writing, `RET`
+spends one after popping, and `RET cc` spends one on the condition **whether or
+not it is taken**, which is why `RET cc` costs 8 when not taken while plain
+`RET` costs 16.
+
+Two accesses deliberately bypass `tick()`: the IE/IF peek in
+`serviceInterrupts()` and the one in `HALT`. Deciding whether to dispatch is not
+a bus access, and charging for it would break every instruction's total.
+
+### The cycle table as an oracle
+
+`kBaseCycles` is independently verified by Blargg's `instr_timing`, so
+redistributing time across M-cycles must not change any instruction's total.
+`executeInner()` still computes what the table says, and debug builds compare it
+against what was actually ticked:
+
+```cpp
+void CPU::verifyStepCycles() const {
+    if (m_stepCycles == m_expectedCycles) return;
+    ... abort with the offending opcode ...
+}
+```
+
+A mistake therefore aborts at the instruction that caused it, rather than
+surfacing as a mysterious timing failure much later. The one table entry that
+changed is `STOP`, corrected from 4 to 8 because it consumes a padding byte;
+`instr_timing` excludes `STOP`, so nothing verified the old value.
+
 ## `step()`
 
 Order of operations matters here:
@@ -180,14 +228,12 @@ All 245 valid base opcodes and all 256 CB opcodes are implemented.
   including the taken/not-taken split on conditional branches
 - Blargg `halt_bug`: **pass** — the PC-fails-to-increment behaviour in
   `fetch8()` is right
+- Blargg `mem_timing`: **3 / 3** — `read_timing`, `write_timing` and
+  `modify_timing`, all of which failed before M-cycle accounting
 
 ## Not implemented yet
 
-- **Cycle granularity is per-instruction, not per-M-cycle.** Memory accesses all
-  happen at once rather than being spread across the instruction's cycles.
-  Invisible to `cpu_instrs` and `instr_timing`, but it is why **`mem_timing`
-  fails all three** of its sub-tests (`read_timing`, `write_timing`,
-  `modify_timing`). Fixing it means threading cycle counting through
-  `read8`/`write8` so peripherals advance mid-instruction — the single largest
-  piece of Phase 12.
 - **`STOP`** consumes its padding byte and otherwise does nothing.
+- **Sub-M-cycle timing.** Peripherals advance in 4-cycle steps, so behaviour
+  that depends on where inside an M-cycle something lands — the wave-RAM access
+  window in [apu.md](apu.md), for instance — is still out of reach.

@@ -1,6 +1,10 @@
 #include "cpu.h"
 
 #include "../memory/mmu.h"
+#include "opcodes.h"
+
+#include <cstdio>
+#include <cstdlib>
 
 CPU::CPU(MMU& mmu) : m_mmu(mmu) {
     // Post-boot register state (DMG). Lets us skip the boot ROM and jump
@@ -34,9 +38,20 @@ void CPU::setFlags(bool z, bool n, bool halfCarry, bool carry) {
 
 // ── Memory helpers ───────────────────────────────────────────────────────────
 
-uint8_t CPU::read8(uint16_t addr) { return m_mmu.read(addr); }
+void CPU::tick(uint8_t tcycles) {
+    m_stepCycles = static_cast<uint8_t>(m_stepCycles + tcycles);
+    m_mmu.tick(tcycles);
+}
 
-void CPU::write8(uint16_t addr, uint8_t val) { m_mmu.write(addr, val); }
+uint8_t CPU::read8(uint16_t addr) {
+    tick(4);
+    return m_mmu.read(addr);
+}
+
+void CPU::write8(uint16_t addr, uint8_t val) {
+    tick(4);
+    m_mmu.write(addr, val);
+}
 
 uint8_t CPU::fetch8() {
     const uint8_t v = read8(m_pc);
@@ -117,38 +132,65 @@ void CPU::writeR16(int idx, uint16_t val) {
 
 // ── Interrupts ───────────────────────────────────────────────────────────────
 
-uint8_t CPU::serviceInterrupts() {
-    const uint8_t ie = read8(0xFFFF);
-    const uint8_t irqf = read8(0xFF0F);
+bool CPU::serviceInterrupts() {
+    // Peek without ticking: deciding whether to dispatch is not itself a bus
+    // access, and charging cycles for it would break every instruction's count.
+    const uint8_t ie      = m_mmu.read(0xFFFF);
+    const uint8_t irqf    = m_mmu.read(0xFF0F);
     const uint8_t pending = static_cast<uint8_t>(ie & irqf & 0x1F);
 
-    if (pending == 0) return 0;
+    if (pending == 0) return false;
 
     // Any pending interrupt wakes the CPU, whether or not IME is set.
     m_halted = false;
-    if (!m_ime) return 0;
+    if (!m_ime) return false;
 
     // Highest priority (lowest bit) wins: VBlank, STAT, Timer, Serial, Joypad.
     int bit = 0;
     while (((pending >> bit) & 1) == 0) ++bit;
 
     m_ime = false;
-    write8(0xFF0F, static_cast<uint8_t>(irqf & ~(1u << bit)));
+
+    // 5 M-cycles: two internal, the two stack writes from push16, then one more
+    // while the vector is loaded.
+    tick(4);
+    tick(4);
+    m_mmu.write(0xFF0F, static_cast<uint8_t>(irqf & ~(1u << bit)));
     push16(m_pc);
     m_pc = static_cast<uint16_t>(0x0040 + bit * 8);
-    return 20;
+    tick(4);
+    return true;
+}
+
+// Blargg's instr_timing independently verifies the cycle table, so it serves as
+// an oracle here: spreading an instruction's time across individual M-cycles
+// must not change its total. Anything that does is a bug in the distribution,
+// and this catches it at the instruction that caused it rather than as a
+// mysterious timing failure much later.
+void CPU::verifyStepCycles() const {
+    if (m_stepCycles == m_expectedCycles) return;
+
+    std::fprintf(stderr,
+                 "CPU cycle mismatch at $%04X: opcode $%02X ticked %u T-cycles, "
+                 "cycle table expects %u\n",
+                 static_cast<unsigned>(m_pc), m_currentOp,
+                 static_cast<unsigned>(m_stepCycles),
+                 static_cast<unsigned>(m_expectedCycles));
+    std::abort();
 }
 
 // ── Step ─────────────────────────────────────────────────────────────────────
 
 uint8_t CPU::step() {
+    m_stepCycles = 0;
+
     // EI enables interrupts only *after* the instruction that follows it, so
     // the pending flag is consumed at the top of the next step.
     const bool enableImeAfter = m_imePending;
 
-    if (const uint8_t serviced = serviceInterrupts(); serviced != 0) {
+    if (serviceInterrupts()) {
         if (enableImeAfter) m_imePending = false;
-        return serviced;
+        return m_stepCycles;
     }
 
     if (enableImeAfter) {
@@ -156,7 +198,21 @@ uint8_t CPU::step() {
         m_imePending = false;
     }
 
-    if (m_halted || m_stopped) return 4;
+    if (m_halted || m_stopped) {
+        // The CPU idles but peripherals keep running, which is what eventually
+        // produces the interrupt that wakes it.
+        tick(4);
+        return m_stepCycles;
+    }
 
-    return execute(fetch8());
+    execute(fetch8());
+
+#ifndef NDEBUG
+    // The cycle table is independently verified by Blargg's instr_timing, so
+    // it doubles as a check that redistributing time across M-cycles did not
+    // change any instruction's total.
+    verifyStepCycles();
+#endif
+
+    return m_stepCycles;
 }

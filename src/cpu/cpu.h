@@ -61,7 +61,15 @@ private:
     void setFlag(uint8_t mask, bool on);
     void setFlags(bool z, bool n, bool halfCarry, bool carry);
 
+    // ── Cycle accounting ─────────────────────────────────────────────────────
+    // Every M-cycle of an instruction goes through tick(), whether it is a
+    // memory access or an internal operation. That is what lets a peripheral
+    // advance partway through an instruction.
+    void tick(uint8_t tcycles);
+
     // ── Memory helpers ───────────────────────────────────────────────────────
+    // These tick before touching memory: on hardware the access lands on the
+    // last cycle of its M-cycle.
     uint8_t  read8(uint16_t addr);
     void     write8(uint16_t addr, uint8_t val);
     uint8_t  fetch8();
@@ -100,13 +108,25 @@ private:
     uint8_t cbSrl(uint8_t v);
 
     // ── Execution (defined in opcodes.cpp) ───────────────────────────────────
-    uint8_t execute(uint8_t op);
+    void execute(uint8_t op);
+    // Runs the instruction and returns what its total *should* be according to
+    // the cycle table. execute() compares that against the cycles actually
+    // ticked; see verifyStepCycles().
+    uint8_t executeInner(uint8_t op);
     void    executeCB(uint8_t op);
 
-    // Returns 20 if an interrupt was dispatched, 0 otherwise.
-    uint8_t serviceInterrupts();
+    void verifyStepCycles() const;
+
+    // Dispatches a pending interrupt if one is due. Returns true if it did.
+    bool serviceInterrupts();
 
     MMU& m_mmu;
+
+    // T-cycles consumed by the instruction currently executing, and what the
+    // cycle table says it should be.
+    uint8_t m_stepCycles{};
+    uint8_t m_expectedCycles{};
+    uint8_t m_currentOp{};
 
     uint16_t m_af{};
     uint16_t m_bc{};

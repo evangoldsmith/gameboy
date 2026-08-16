@@ -63,7 +63,7 @@ When a doc and the code disagree, the code is right and the doc is a bug.
 Roadmap Phases 0–11 are done. **All 11 Blargg `cpu_instrs` sub-tests pass**, **Tetris is playable with full audio**, and **Pokémon Red reaches the name entry screen.**
 
 - **Implemented**: full SM83 instruction set, interrupt dispatch, MMU routing with I/O dispatch, cartridge header parsing, MBC1/2/3/5, battery-backed saves, serial with correct clock-source handling, the full DIV/TIMA timer, background/window/sprite rendering, OAM DMA, all five interrupts, joypad input, all four sound channels with SDL audio output, Game Boy Doctor trace logging.
-- **Phase 12 (accuracy) is next**: M-cycle memory timing, variable mode 3 length, the STAT and OAM bugs.
+- **Phase 12 is partly done**: M-cycle memory timing landed (`mem_timing` 3/3). Still outstanding: variable mode 3 length, the pixel FIFO, the STAT and OAM bugs, and driving the APU frame sequencer off DIV bit 4.
 - **The MBC3 RTC stores and latches but does not tick**, and is not persisted to the `.sav`.
 
 ### Test ROM results
@@ -78,7 +78,7 @@ Roadmap Phases 0–11 are done. **All 11 Blargg `cpu_instrs` sub-tests pass**, *
 | `dmg-acid2` | pixel perfect |
 | `dmg_sound` | 7 / 12 |
 | `oam_bug` | 2 / 8 |
-| `mem_timing` | 0 / 3 |
+| `mem_timing` | 3 / 3 |
 
 Per-suite breakdowns live in `docs/README.md` and the relevant component docs. Mooneye and Mealybug have not been run — they need different harnesses (register signature and screenshot comparison respectively).
 - No tests exist beyond running test ROMs.

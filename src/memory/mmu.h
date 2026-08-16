@@ -21,10 +21,18 @@ public:
     uint8_t read(uint16_t addr);
     void    write(uint16_t addr, uint8_t val);
 
+    // Advances every peripheral and drains their interrupt flags into IF.
+    //
+    // The CPU calls this once per M-cycle from inside an instruction, which is
+    // what makes a peripheral observable partway through one — the difference
+    // between passing and failing Blargg's mem_timing.
+    void tick(uint8_t tcycles);
+
 private:
     uint8_t readIO(uint16_t addr);
     void    writeIO(uint16_t addr, uint8_t val);
     void    oamDma(uint8_t srcHigh);
+    void    requestInterrupt(Interrupt which);
 
     Cartridge& m_cart;
     Serial&    m_serial;

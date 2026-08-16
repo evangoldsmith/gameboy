@@ -17,7 +17,25 @@ MMU(Cartridge& cart, Serial& serial, Timer& timer, PPU& ppu);
 
 uint8_t read(uint16_t addr);
 void    write(uint16_t addr, uint8_t val);
+void    tick(uint8_t tcycles);
 ```
+
+### `tick()` — the MMU is also the bus
+
+`tick()` advances the timer, PPU and APU, then drains their interrupt flags into
+IF. The CPU calls it **once per M-cycle from inside an instruction**, so a
+peripheral moves partway through one rather than in a lump afterwards. A ROM
+that reads a timer or LCD register mid-instruction then sees the value hardware
+would have produced at that point — the difference between passing and failing
+Blargg's `mem_timing`.
+
+Interrupt routing lives here rather than in `GameBoy` for the same reason: an
+interrupt raised mid-instruction must be visible to a later access within that
+same instruction.
+
+`GameBoy::step()` is consequently just `m_cpu.step()`. Note that `oamDma()` and
+the trace logger call `read()` directly and so do **not** tick — neither is a
+CPU bus access.
 
 ### Why `read` is not `const`
 

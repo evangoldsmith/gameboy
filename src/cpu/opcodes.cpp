@@ -1,5 +1,6 @@
 #include "opcodes.h"
 
+#include "../memory/mmu.h"
 #include "cpu.h"
 
 #include <cstdio>
@@ -173,7 +174,12 @@ void CPU::executeCB(uint8_t op) {
 
 // ── Base dispatch ────────────────────────────────────────────────────────────
 
-uint8_t CPU::execute(uint8_t op) {
+void CPU::execute(uint8_t op) {
+    m_currentOp      = op;
+    m_expectedCycles = executeInner(op);
+}
+
+uint8_t CPU::executeInner(uint8_t op) {
     uint8_t cycles = kBaseCycles[op];
 
     // Condition code index used by JR/JP/CALL/RET cc: 0=NZ 1=Z 2=NC 3=C
@@ -237,6 +243,7 @@ uint8_t CPU::execute(uint8_t op) {
 
     // RST n ($C7,$CF,...,$FF)
     if ((op & 0xC7) == 0xC7) {
+        tick(4);
         push16(m_pc);
         m_pc = static_cast<uint16_t>(op & 0x38);
         return cycles;
@@ -259,9 +266,13 @@ uint8_t CPU::execute(uint8_t op) {
 
         case 0xF8:  // LD HL,SP+r8
             m_hl = aluAddSP(static_cast<int8_t>(fetch8()));
+            tick(4);
             break;
 
-        case 0xF9: m_sp = m_hl; break;  // LD SP,HL
+        case 0xF9:  // LD SP,HL
+            m_sp = m_hl;
+            tick(4);
+            break;
 
         // ── Indirect 8-bit loads ─────────────────────────────────────────────
         case 0x02: write8(m_bc, a()); break;
@@ -285,19 +296,24 @@ uint8_t CPU::execute(uint8_t op) {
         case 0x03: case 0x13: case 0x23: case 0x33: {
             const int r = (op >> 4) & 0x03;
             writeR16(r, static_cast<uint16_t>(readR16(r) + 1));
+            tick(4);  // 16-bit increment costs an extra internal cycle
             break;
         }
         case 0x0B: case 0x1B: case 0x2B: case 0x3B: {
             const int r = (op >> 4) & 0x03;
             writeR16(r, static_cast<uint16_t>(readR16(r) - 1));
+            tick(4);
             break;
         }
         case 0x09: case 0x19: case 0x29: case 0x39:
             aluAddHL(readR16((op >> 4) & 0x03));
+            tick(4);
             break;
 
         case 0xE8:  // ADD SP,r8
             m_sp = aluAddSP(static_cast<int8_t>(fetch8()));
+            tick(4);
+            tick(4);
             break;
 
         // ── Accumulator rotates (Z is always cleared, unlike the CB forms) ───
@@ -338,21 +354,27 @@ uint8_t CPU::execute(uint8_t op) {
         case 0x18: {  // JR r8
             const int8_t e = static_cast<int8_t>(fetch8());
             m_pc = static_cast<uint16_t>(m_pc + e);
+            tick(4);
             break;
         }
         case 0x20: case 0x28: case 0x30: case 0x38: {  // JR cc,r8
             const int8_t e = static_cast<int8_t>(fetch8());
             if (cond((op >> 3) & 0x03)) {
                 m_pc = static_cast<uint16_t>(m_pc + e);
+                tick(4);
                 cycles = static_cast<uint8_t>(cycles + 4);
             }
             break;
         }
-        case 0xC3: m_pc = fetch16(); break;  // JP a16
+        case 0xC3:  // JP a16
+            m_pc = fetch16();
+            tick(4);
+            break;
         case 0xC2: case 0xCA: case 0xD2: case 0xDA: {  // JP cc,a16
             const uint16_t target = fetch16();
             if (cond((op >> 3) & 0x03)) {
                 m_pc = target;
+                tick(4);
                 cycles = static_cast<uint8_t>(cycles + 4);
             }
             break;
@@ -362,6 +384,7 @@ uint8_t CPU::execute(uint8_t op) {
         // ── Calls and returns ────────────────────────────────────────────────
         case 0xCD: {  // CALL a16
             const uint16_t target = fetch16();
+            tick(4);
             push16(m_pc);
             m_pc = target;
             break;
@@ -369,20 +392,29 @@ uint8_t CPU::execute(uint8_t op) {
         case 0xC4: case 0xCC: case 0xD4: case 0xDC: {  // CALL cc,a16
             const uint16_t target = fetch16();
             if (cond((op >> 3) & 0x03)) {
+                tick(4);
                 push16(m_pc);
                 m_pc = target;
                 cycles = static_cast<uint8_t>(cycles + 12);
             }
             break;
         }
-        case 0xC9: m_pc = pop16(); break;  // RET
-        case 0xD9:                         // RETI
+        case 0xC9:  // RET
             m_pc = pop16();
+            tick(4);
+            break;
+        case 0xD9:  // RETI
+            m_pc = pop16();
+            tick(4);
             m_ime = true;
             break;
         case 0xC0: case 0xC8: case 0xD0: case 0xD8:  // RET cc
+            // The condition itself costs a cycle whether or not it is taken,
+            // which is why RET cc is 8 when not taken but RET is only 16.
+            tick(4);
             if (cond((op >> 3) & 0x03)) {
                 m_pc = pop16();
+                tick(4);
                 cycles = static_cast<uint8_t>(cycles + 12);
             }
             break;
@@ -393,15 +425,15 @@ uint8_t CPU::execute(uint8_t op) {
         case 0xE1: m_hl = pop16(); break;
         case 0xF1: m_af = static_cast<uint16_t>(pop16() & 0xFFF0); break;  // low nibble of F is always 0
 
-        case 0xC5: push16(m_bc); break;
-        case 0xD5: push16(m_de); break;
-        case 0xE5: push16(m_hl); break;
-        case 0xF5: push16(m_af); break;
+        case 0xC5: tick(4); push16(m_bc); break;
+        case 0xD5: tick(4); push16(m_de); break;
+        case 0xE5: tick(4); push16(m_hl); break;
+        case 0xF5: tick(4); push16(m_af); break;
 
         // ── Control ──────────────────────────────────────────────────────────
         case 0x76: {  // HALT
-            const uint8_t pending =
-                static_cast<uint8_t>(read8(0xFFFF) & read8(0xFF0F) & 0x1F);
+            const uint8_t pending = static_cast<uint8_t>(
+                m_mmu.read(0xFFFF) & m_mmu.read(0xFF0F) & 0x1F);
             if (!m_ime && pending != 0)
                 m_haltBug = true;  // PC fails to increment on the next fetch
             else

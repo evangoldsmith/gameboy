@@ -33,6 +33,27 @@ MMU::MMU(Cartridge& cart, Serial& serial, Timer& timer, PPU& ppu, Joypad& joypad
     : m_cart(cart), m_serial(serial), m_timer(timer), m_ppu(ppu), m_joypad(joypad),
       m_apu(apu) {}
 
+void MMU::requestInterrupt(Interrupt which) {
+    const uint8_t bit = static_cast<uint8_t>(1u << static_cast<uint8_t>(which));
+    m_io[REG_IF - 0xFF00] = static_cast<uint8_t>(m_io[REG_IF - 0xFF00] | bit);
+}
+
+// Peripherals advance from here rather than from GameBoy::step(), so they move
+// partway through an instruction instead of in a lump afterwards. A ROM that
+// reads a timer or LCD register mid-instruction sees the value hardware would
+// have produced at that point.
+void MMU::tick(uint8_t tcycles) {
+    m_timer.tick(tcycles);
+    m_ppu.tick(tcycles);
+    m_apu.tick(tcycles);
+
+    if (m_ppu.takeVBlankIrq()) requestInterrupt(Interrupt::VBlank);
+    if (m_ppu.takeStatIrq())   requestInterrupt(Interrupt::LCDStat);
+    if (m_timer.takeIrq())     requestInterrupt(Interrupt::Timer);
+    if (m_serial.takeIrq())    requestInterrupt(Interrupt::Serial);
+    if (m_joypad.takeIrq())    requestInterrupt(Interrupt::Joypad);
+}
+
 uint8_t MMU::read(uint16_t addr) {
     // $0000–$7FFF: Cartridge ROM
     if (addr < 0x8000)

@@ -42,8 +42,6 @@ public:
     APU&       apu()       { return m_apu; }
 
 private:
-    void requestInterrupt(Interrupt which);
-
     // Declaration order is initialisation order: MMU needs the peripherals,
     // and CPU needs the MMU.
     Cartridge m_cart;

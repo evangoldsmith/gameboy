@@ -42,13 +42,13 @@ Measured, not estimated. ROMs live in `roms/`, which is gitignored — see
 | `dmg-acid2` | **Pixel perfect** | 23040/23040 pixels match the reference |
 | Blargg `dmg_sound` | 7 / 12 | See [apu.md](apu.md) |
 | Blargg `oam_bug` | 2 / 8 | OAM corruption is not emulated at all |
-| Blargg `mem_timing` | 0 / 3 | Needs M-cycle memory access — Phase 12 |
+| Blargg `mem_timing` | **3 / 3** | M-cycle memory access |
 
 `dmg-acid2` matching exactly is the strongest single result here: it exercises
 sprite priority, the 10-sprite limit, X/Y flipping, the window line counter,
 BG-over-OBJ priority and palette application in one image.
 
-The three failing suites are all Phase 12 accuracy work, and none of them
+The two failing suites are remaining Phase 12 accuracy work, and neither
 affects whether games run.
 
 ### Getting the test ROMs
