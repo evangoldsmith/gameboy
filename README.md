@@ -2,8 +2,7 @@
 
 DMG-01 Game Boy emulator in C++20.
 
-Passes all 11 of Blargg's `cpu_instrs` tests. Tetris is playable; Pokémon Red
-boots to its title screen. No audio yet.
+Download your own roms and add the `*.gb` files into the roms/ directory.
 
 ## Running
 
