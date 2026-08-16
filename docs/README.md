@@ -40,7 +40,7 @@ Measured, not estimated. ROMs live in `roms/`, which is gitignored — see
 | Blargg `instr_timing` | **Pass** | Instruction cycle counts |
 | Blargg `halt_bug` | **Pass** | HALT with IME=0 and an interrupt pending |
 | `dmg-acid2` | **Pixel perfect** | 23040/23040 pixels match the reference |
-| Blargg `dmg_sound` | 7 / 12 | See [apu.md](apu.md) |
+| Blargg `dmg_sound` | 9 / 12 | See [apu.md](apu.md) |
 | Blargg `oam_bug` | 2 / 8 | OAM corruption is not emulated at all |
 | Blargg `mem_timing` | **3 / 3** | M-cycle memory access |
 

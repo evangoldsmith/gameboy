@@ -31,7 +31,7 @@ what makes them reusable if a GBA core ever happens — see the appendix in
 static constexpr int SAMPLE_RATE = 48000;
 static constexpr int CHANNELS    = 2;     // interleaved stereo
 
-void tick(uint8_t tcycles);
+void tick(uint8_t tcycles, bool divBit);   // divBit is DIV bit 4
 
 uint8_t readReg(uint16_t addr) const;
 void    writeReg(uint16_t addr, uint8_t val);
@@ -60,8 +60,7 @@ sample data alone.
 
 ## The frame sequencer
 
-A 512 Hz clock — one step every 8192 T-cycles — driving three units on an
-8-step cycle:
+A 512 Hz clock driving three units on an 8-step cycle:
 
 | Step | Length (256 Hz) | Sweep (128 Hz) | Envelope (64 Hz) |
 |---|---|---|---|
@@ -69,8 +68,14 @@ A 512 Hz clock — one step every 8192 T-cycles — driving three units on an
 | 2, 6 | ✓ | ✓ | |
 | 7 | | | ✓ |
 
-`FrameSequencer::tick()` returns the step that just began, or `-1` when the
-boundary was not crossed, so `APU::tick()` reads as a straight dispatch.
+It is **not** clocked by its own counter. Hardware steps it on the falling edge
+of **DIV bit 4** (bit 12 of the timer's internal counter), which is why writing
+to DIV clocks the sequencer as a side effect — DIV writes clear the counter, and
+clearing a set bit is a falling edge. `MMU::tick()` therefore advances the timer
+before the APU and hands it `Timer::apuDivBit()`.
+
+`FrameSequencer::tick()` returns the step that just began, or `-1` when no edge
+occurred, so `APU::tick()` reads as a straight dispatch.
 
 ## PulseChannel
 
@@ -211,17 +216,17 @@ Complete for roadmap Phases 10 and 11 — all four channels. Verified three ways
   and CH4 for 12 (percussion) — the shape you would expect from the
   arrangement.
 
-## Blargg `dmg_sound`: 7 / 12
+## Blargg `dmg_sound`: 9 / 12
 
 | Sub-test | Result |
 |---|---|
 | **01-registers** | **ok** |
 | **02-len ctr** | **ok** |
-| 03-trigger | fail (03) |
+| **03-trigger** | **ok** |
 | **04-sweep** | **ok** |
 | **05-sweep details** | **ok** |
 | **06-overflow on trigger** | **ok** |
-| 07-len sweep period sync | fail (05) |
+| **07-len sweep period sync** | **ok** |
 | **08-len ctr during power** | **ok** |
 | 09-wave read while on | fail (01) |
 | 10-wave trigger while on | fail (01) |
@@ -232,7 +237,7 @@ Complete for roadmap Phases 10 and 11 — all four channels. Verified three ways
 overflow check and the negate-bit rule — the two behaviours that looked most
 like bugs when writing them.
 
-Two fixes took this from 4/12:
+Fixes so far, from an original 4/12:
 
 - **`$FF27–$FF2F` must read `$FF`.** Those addresses are unused, but they still
   belong to the APU. Leaving them out of the MMU's APU range let them fall
@@ -243,15 +248,26 @@ Two fixes took this from 4/12:
   `writeLengthLoad()` exists for. Fixed `11-regs after power` and `08-len ctr
   during power`.
 
-The five remaining failures fall into two groups:
+- **The frame sequencer runs off DIV bit 4**, not its own counter. Hardware
+  steps it on that signal's falling edge, so anything clearing DIV also clocks
+  the sequencer. Fixed `03-trigger` and `07-len sweep period sync`.
+- **Two length-counter quirks that depend on sequencer phase**, factored into
+  `LengthQuirks`: enabling the length counter while the *next* step will not
+  clock it costs an immediate extra tick, and so does a trigger that reloads a
+  counter which had run down to zero.
 
-- **Frame sequencer phase** (03, 07) — trigger behaviour and length/sweep
-  synchronisation both depend on *where* in the 8-step cycle an event lands,
-  which is where running the sequencer off its own counter rather than DIV
-  bit 4 shows up.
-- **Wave RAM while the channel is running** (09, 10, 12) — the read/write
-  redirect is implemented, but not the narrow timing window it applies in, nor
-  the corruption a retrigger causes.
+Two details were needed to make the DIV-driven sequencer behave:
+
+- The edge detector keeps tracking DIV **while the APU is powered off**. That
+  signal never stops on hardware, and letting it go stale meant power-on saw a
+  phantom falling edge and stepped early — which regressed `08` until fixed.
+- `reset()` parks the step at 7, not 0, because powering on resets the
+  sequencer so the *next* step is 0.
+
+The three remaining failures are all **wave RAM while the channel is running**
+(09, 10, 12). The read/write redirect is implemented, but not the narrow timing
+window it applies in, nor the corruption a retrigger causes. Both need
+sub-M-cycle resolution on the wave position — see [cpu.md](cpu.md).
 
 ## Not implemented yet
 

@@ -16,23 +16,28 @@
 // single 512 Hz clock.
 class FrameSequencer {
 public:
-    // Advances the 8-step cycle. Returns the step that just began, or -1 if the
-    // 512 Hz boundary was not crossed.
-    int tick(uint8_t tcycles);
+    // Driven by DIV bit 4 rather than an internal counter: hardware steps on
+    // that signal's falling edge, so anything that clears DIV also clocks the
+    // sequencer. Returns the step that just began, or -1 if no edge occurred.
+    int tick(bool divBit);
 
-    void reset() { m_counter = 0; m_step = 0; }
+    // Powering the APU on resets the sequencer so the *next* step is 0, which
+    // is why this parks at 7 rather than 0. The DIV edge state is deliberately
+    // left alone — that signal is continuous on hardware.
+    void reset() { m_step = 7; }
     int  step() const { return m_step; }
+
+    // True when the *next* step will clock the length counters. Several length
+    // quirks hinge on this being false.
+    bool nextStepClocksLength() const { return clocksLength((m_step + 1) % 8); }
 
     static bool clocksLength(int step)   { return (step % 2) == 0; }
     static bool clocksSweep(int step)    { return step == 2 || step == 6; }
     static bool clocksEnvelope(int step) { return step == 7; }
 
 private:
-    // 4194304 / 512
-    static constexpr uint32_t PERIOD = 8192;
-
-    uint32_t m_counter{};
-    int      m_step{};
+    bool m_lastDivBit{};
+    int  m_step{};
 };
 
 // The NRx2 volume envelope, shared by the two pulse channels and the noise
@@ -59,6 +64,32 @@ private:
     uint8_t m_timer{};
 };
 
+// Applies the two length-counter quirks that depend on the frame sequencer's
+// phase, shared by all four channels.
+//
+// Enabling the length counter while the next sequencer step will *not* clock it
+// costs an immediate extra tick; so does a trigger that reloads a counter which
+// had run down to zero. Both exist because the hardware's length unit is edge
+// driven off the same phase the sequencer is.
+struct LengthQuirks {
+    // Returns true if the channel should be disabled as a result.
+    template <typename Counter>
+    static bool onNrx4Write(Counter& counter, bool wasEnabled, bool nowEnabled,
+                            bool trigger, bool nextStepClocksLength) {
+        if (nextStepClocksLength || wasEnabled || !nowEnabled || counter == 0)
+            return false;
+        --counter;
+        return counter == 0 && !trigger;
+    }
+
+    template <typename Counter>
+    static void onTriggerReload(Counter& counter, bool nowEnabled,
+                                bool reloaded, bool nextStepClocksLength) {
+        if (reloaded && nowEnabled && !nextStepClocksLength && counter > 0)
+            --counter;
+    }
+};
+
 // Square wave with a duty cycle, length counter and volume envelope. Channel 1
 // additionally has a frequency sweep; channel 2 is the same unit without it.
 class PulseChannel {
@@ -70,9 +101,10 @@ public:
     void tickEnvelope() { m_envelope.tick(); }
     void tickSweep();
 
-    // Register index 0-4, corresponding to NRx0-NRx4.
+    // Register index 0-4, corresponding to NRx0-NRx4. nextStepClocksLength is
+    // the frame sequencer's phase, which several length quirks depend on.
     uint8_t readReg(int idx) const;
-    void    writeReg(int idx, uint8_t val);
+    void    writeReg(int idx, uint8_t val, bool nextStepClocksLength);
 
     // Loads the length counter without touching any other register state. On
     // DMG this stays reachable while the APU is powered off.
@@ -87,7 +119,7 @@ public:
     void powerOff();
 
 private:
-    void     trigger();
+    bool     trigger();
     uint16_t frequency() const;
     void     setFrequency(uint16_t f);
     uint16_t nextSweepFrequency();
@@ -123,7 +155,7 @@ public:
 
     // Register index 0-4, corresponding to NR30-NR34.
     uint8_t readReg(int idx) const;
-    void    writeReg(int idx, uint8_t val);
+    void    writeReg(int idx, uint8_t val, bool nextStepClocksLength);
 
     // See PulseChannel::writeLengthLoad. Channel 3's counter is 8-bit-loaded
     // but counts to 256.
@@ -140,7 +172,7 @@ public:
     void powerOff();
 
 private:
-    void     trigger();
+    bool     trigger();
     uint16_t frequency() const;
     void     reloadPeriod();
     void     loadSample();
@@ -170,7 +202,7 @@ public:
 
     // Register index 0-3, corresponding to NR41-NR44.
     uint8_t readReg(int idx) const;
-    void    writeReg(int idx, uint8_t val);
+    void    writeReg(int idx, uint8_t val, bool nextStepClocksLength);
 
     // See PulseChannel::writeLengthLoad.
     void writeLengthLoad(uint8_t val);
@@ -183,7 +215,7 @@ public:
     void powerOff();
 
 private:
-    void    trigger();
+    bool    trigger();
     int32_t period() const;
 
     uint8_t m_nr41{};  // length load

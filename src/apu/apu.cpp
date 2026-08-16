@@ -52,7 +52,12 @@ void APU::pushSilence() {
     m_samples.push_back(0);
 }
 
-void APU::tick(uint8_t tcycles) {
+void APU::tick(uint8_t tcycles, bool divBit) {
+    // Track the DIV edge even while powered down. The signal never stops on
+    // hardware, and letting the edge detector go stale means power-on can see a
+    // phantom falling edge and step the sequencer early.
+    const int step = m_sequencer.tick(divBit);
+
     if (!m_powered) {
         // Keep producing silence so the frontend's audio queue does not starve
         // while the APU is switched off.
@@ -64,7 +69,7 @@ void APU::tick(uint8_t tcycles) {
         return;
     }
 
-    if (const int step = m_sequencer.tick(tcycles); step >= 0) {
+    if (step >= 0) {
         if (FrameSequencer::clocksLength(step)) {
             m_ch1.tickLength();
             m_ch2.tickLength();
@@ -186,8 +191,9 @@ void APU::writeReg(uint16_t addr, uint8_t val) {
         default: break;
     }
 
-    if (addr >= 0xFF10 && addr <= 0xFF14)      m_ch1.writeReg(addr - 0xFF10, val);
-    else if (addr >= 0xFF16 && addr <= 0xFF19) m_ch2.writeReg(addr - 0xFF15, val);
-    else if (addr >= 0xFF1A && addr <= 0xFF1E) m_ch3.writeReg(addr - 0xFF1A, val);
-    else if (addr >= 0xFF20 && addr <= 0xFF23) m_ch4.writeReg(addr - 0xFF20, val);
+    const bool nsl = m_sequencer.nextStepClocksLength();
+    if (addr >= 0xFF10 && addr <= 0xFF14)      m_ch1.writeReg(addr - 0xFF10, val, nsl);
+    else if (addr >= 0xFF16 && addr <= 0xFF19) m_ch2.writeReg(addr - 0xFF15, val, nsl);
+    else if (addr >= 0xFF1A && addr <= 0xFF1E) m_ch3.writeReg(addr - 0xFF1A, val, nsl);
+    else if (addr >= 0xFF20 && addr <= 0xFF23) m_ch4.writeReg(addr - 0xFF20, val, nsl);
 }

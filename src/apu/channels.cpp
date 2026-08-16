@@ -18,11 +18,11 @@ constexpr uint8_t NRX4_LENGTH_EN = 0x40;
 
 // ── FrameSequencer ───────────────────────────────────────────────────────────
 
-int FrameSequencer::tick(uint8_t tcycles) {
-    m_counter += tcycles;
-    if (m_counter < PERIOD) return -1;
+int FrameSequencer::tick(bool divBit) {
+    const bool falling = m_lastDivBit && !divBit;
+    m_lastDivBit = divBit;
+    if (!falling) return -1;
 
-    m_counter -= PERIOD;
     m_step = (m_step + 1) % 8;
     return m_step;
 }
@@ -121,10 +121,11 @@ void PulseChannel::tickSweep() {
     }
 }
 
-void PulseChannel::trigger() {
+bool PulseChannel::trigger() {
     m_enabled = dacEnabled();
 
-    if (m_lengthCounter == 0) m_lengthCounter = 64;
+    const bool reloaded = m_lengthCounter == 0;
+    if (reloaded) m_lengthCounter = 64;
 
     reloadPeriod();
     m_envelope.trigger();
@@ -139,6 +140,7 @@ void PulseChannel::trigger() {
         // Triggering with a shift set performs an immediate overflow check.
         if (shift != 0 && nextSweepFrequency() > 2047) m_enabled = false;
     }
+    return reloaded;
 }
 
 uint8_t PulseChannel::readReg(int idx) const {
@@ -152,7 +154,7 @@ uint8_t PulseChannel::readReg(int idx) const {
     }
 }
 
-void PulseChannel::writeReg(int idx, uint8_t val) {
+void PulseChannel::writeReg(int idx, uint8_t val, bool nextStepClocksLength) {
     switch (idx) {
         case 0:
             m_nrx0 = val;
@@ -173,10 +175,21 @@ void PulseChannel::writeReg(int idx, uint8_t val) {
         case 3:
             m_nrx3 = val;
             break;
-        default:
+        default: {
+            const bool wasEnabled = (m_nrx4 & NRX4_LENGTH_EN) != 0;
             m_nrx4 = val;
-            if ((val & NRX4_TRIGGER) != 0) trigger();
+            const bool nowEnabled = (m_nrx4 & NRX4_LENGTH_EN) != 0;
+            const bool trig       = (val & NRX4_TRIGGER) != 0;
+
+            if (LengthQuirks::onNrx4Write(m_lengthCounter, wasEnabled, nowEnabled,
+                                          trig, nextStepClocksLength))
+                m_enabled = false;
+
+            if (trig)
+                LengthQuirks::onTriggerReload(m_lengthCounter, nowEnabled,
+                                              trigger(), nextStepClocksLength);
             break;
+        }
     }
 }
 
@@ -236,14 +249,16 @@ void WaveChannel::tickLength() {
     if (--m_lengthCounter == 0) m_enabled = false;
 }
 
-void WaveChannel::trigger() {
+bool WaveChannel::trigger() {
     m_enabled = dacEnabled();
-    if (m_lengthCounter == 0) m_lengthCounter = 256;
+    const bool reloaded = m_lengthCounter == 0;
+    if (reloaded) m_lengthCounter = 256;
     reloadPeriod();
     // Position resets to 0, but the first tick advances before reading — so the
     // first sample actually played is index 1, not 0.
     m_position = 0;
     m_sample   = 0;
+    return reloaded;
 }
 
 uint8_t WaveChannel::readReg(int idx) const {
@@ -256,7 +271,7 @@ uint8_t WaveChannel::readReg(int idx) const {
     }
 }
 
-void WaveChannel::writeReg(int idx, uint8_t val) {
+void WaveChannel::writeReg(int idx, uint8_t val, bool nextStepClocksLength) {
     switch (idx) {
         case 0:
             m_nr30 = val;
@@ -268,10 +283,21 @@ void WaveChannel::writeReg(int idx, uint8_t val) {
             break;
         case 2: m_nr32 = val; break;
         case 3: m_nr33 = val; break;
-        default:
+        default: {
+            const bool wasEnabled = (m_nr34 & NRX4_LENGTH_EN) != 0;
             m_nr34 = val;
-            if ((val & NRX4_TRIGGER) != 0) trigger();
+            const bool nowEnabled = (m_nr34 & NRX4_LENGTH_EN) != 0;
+            const bool trig       = (val & NRX4_TRIGGER) != 0;
+
+            if (LengthQuirks::onNrx4Write(m_lengthCounter, wasEnabled, nowEnabled,
+                                          trig, nextStepClocksLength))
+                m_enabled = false;
+
+            if (trig)
+                LengthQuirks::onTriggerReload(m_lengthCounter, nowEnabled,
+                                              trigger(), nextStepClocksLength);
             break;
+        }
     }
 }
 
@@ -347,12 +373,14 @@ void NoiseChannel::tickLength() {
     if (--m_lengthCounter == 0) m_enabled = false;
 }
 
-void NoiseChannel::trigger() {
+bool NoiseChannel::trigger() {
     m_enabled = dacEnabled();
-    if (m_lengthCounter == 0) m_lengthCounter = 64;
+    const bool reloaded = m_lengthCounter == 0;
+    if (reloaded) m_lengthCounter = 64;
     m_periodTimer = period();
     m_envelope.trigger();
     m_lfsr = 0x7FFF;  // all ones
+    return reloaded;
 }
 
 uint8_t NoiseChannel::readReg(int idx) const {
@@ -364,7 +392,7 @@ uint8_t NoiseChannel::readReg(int idx) const {
     }
 }
 
-void NoiseChannel::writeReg(int idx, uint8_t val) {
+void NoiseChannel::writeReg(int idx, uint8_t val, bool nextStepClocksLength) {
     switch (idx) {
         case 0:
             m_nr41 = val;
@@ -375,10 +403,21 @@ void NoiseChannel::writeReg(int idx, uint8_t val) {
             if (!dacEnabled()) m_enabled = false;
             break;
         case 2: m_nr43 = val; break;
-        default:
+        default: {
+            const bool wasEnabled = (m_nr44 & NRX4_LENGTH_EN) != 0;
             m_nr44 = val;
-            if ((val & NRX4_TRIGGER) != 0) trigger();
+            const bool nowEnabled = (m_nr44 & NRX4_LENGTH_EN) != 0;
+            const bool trig       = (val & NRX4_TRIGGER) != 0;
+
+            if (LengthQuirks::onNrx4Write(m_lengthCounter, wasEnabled, nowEnabled,
+                                          trig, nextStepClocksLength))
+                m_enabled = false;
+
+            if (trig)
+                LengthQuirks::onTriggerReload(m_lengthCounter, nowEnabled,
+                                              trigger(), nextStepClocksLength);
             break;
+        }
     }
 }
 

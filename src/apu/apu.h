@@ -17,7 +17,9 @@ public:
     static constexpr int SAMPLE_RATE = 48000;
     static constexpr int CHANNELS    = 2;  // interleaved stereo
 
-    void tick(uint8_t tcycles);
+    // divBit is DIV bit 4 from the timer; the frame sequencer steps on its
+    // falling edge. See Timer::apuDivBit().
+    void tick(uint8_t tcycles, bool divBit);
 
     uint8_t readReg(uint16_t addr) const;
     void    writeReg(uint16_t addr, uint8_t val);

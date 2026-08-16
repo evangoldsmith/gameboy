@@ -45,7 +45,9 @@ void MMU::requestInterrupt(Interrupt which) {
 void MMU::tick(uint8_t tcycles) {
     m_timer.tick(tcycles);
     m_ppu.tick(tcycles);
-    m_apu.tick(tcycles);
+    // The APU's frame sequencer runs off DIV bit 4, so the timer must advance
+    // first — writing to DIV clears that bit and clocks the sequencer.
+    m_apu.tick(tcycles, m_timer.apuDivBit());
 
     if (m_ppu.takeVBlankIrq()) requestInterrupt(Interrupt::VBlank);
     if (m_ppu.takeStatIrq())   requestInterrupt(Interrupt::LCDStat);
