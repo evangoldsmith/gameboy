@@ -4,6 +4,8 @@ DMG-01 Game Boy emulator in C++20.
 
 Download your own roms and add the `*.gb` files into the roms/ directory.
 
+Games with a battery-backed cartridge save to a `.sav` file next to the ROM.
+
 ## Running
 
 ```bash

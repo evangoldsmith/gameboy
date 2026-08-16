@@ -8,7 +8,7 @@ works, and what is not implemented yet.
 |---|---|---|
 | [cpu.md](cpu.md) | `src/cpu/cpu.{h,cpp}`, `src/cpu/opcodes.{h,cpp}` | Complete instruction set |
 | [mmu.md](mmu.md) | `src/memory/mmu.{h,cpp}` | Address routing + partial I/O dispatch |
-| [cartridge.md](cartridge.md) | `src/cartridge/cartridge.{h,cpp}` | Header parsing + MBC1/2/3/5 |
+| [cartridge.md](cartridge.md) | `src/cartridge/cartridge.{h,cpp}` | Header parsing, MBC1/2/3/5, battery saves |
 | [ppu.md](ppu.md) | `src/ppu/ppu.{h,cpp}` | Background, window and sprite rendering |
 | [apu.md](apu.md) | `src/apu/apu.{h,cpp}` | **Stub** |
 | [timer.md](timer.md) | `src/timer.{h,cpp}` | DIV + TIMA with falling-edge clocking |
@@ -49,8 +49,9 @@ All three graphics layers render — background, window and sprites, with OAM
 DMA — input works, and MBC1/2/3/5 are implemented. **Tetris is playable, and
 Pokémon Red reaches Prof. Oak's intro and the name entry screen.**
 
-Next up is Phase 10, the APU. Saves are still not persisted to disk, and the
-MBC3 real-time clock does not tick.
+Battery-backed cartridges persist to a `.sav` file next to the ROM.
+
+Next up is Phase 10, the APU. The MBC3 real-time clock still does not tick.
 
 `instr_timing`, `dmg-acid2`, and the Mooneye suite are not in `roms/`, so timer
 and PPU edge cases are implemented to spec but unverified beyond what

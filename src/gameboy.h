@@ -29,6 +29,10 @@ public:
 
     const CartridgeHeader& header() const { return m_cart.header(); }
 
+    // Persists cartridge RAM if the cartridge is battery-backed and RAM has
+    // changed. Cheap to call repeatedly — it is a no-op when nothing is dirty.
+    bool flushSave() { return m_cart.flushSave(); }
+
     const CPU& cpu() const { return m_cpu; }
     MMU&       mmu()       { return m_mmu; }
     Serial&    serial()    { return m_serial; }

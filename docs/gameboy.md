@@ -15,6 +15,7 @@ uint8_t step();       // one instruction + peripheral catch-up; returns T-cycles
 void    runFrame();   // TCYCLES_PER_FRAME worth of steps
 
 const CartridgeHeader& header() const;
+bool flushSave();     // persist cartridge RAM; no-op unless battery-backed and dirty
 
 const CPU& cpu() const;
 MMU&       mmu();

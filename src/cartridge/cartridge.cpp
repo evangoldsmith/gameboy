@@ -1,6 +1,9 @@
 #include "cartridge.h"
 
+#include <algorithm>
+#include <filesystem>
 #include <fstream>
+#include <iostream>
 #include <stdexcept>
 
 namespace {
@@ -20,6 +23,26 @@ MBCType mbcTypeFromByte(uint8_t b) {
         case 0x19: case 0x1A: case 0x1B:
         case 0x1C: case 0x1D: case 0x1E: return MBCType::MBC5;
         default:                     return MBCType::None;
+    }
+}
+
+// A battery keeps the cartridge's SRAM powered while the console is off. The
+// game never knows about it — it writes ordinary RAM either way — so the only
+// thing to emulate is whether those bytes survive to the next run.
+bool batteryFromByte(uint8_t b) {
+    switch (b) {
+        case 0x03:              // MBC1 + RAM + BATTERY
+        case 0x06:              // MBC2 + BATTERY
+        case 0x09:              // ROM + RAM + BATTERY
+        case 0x0D:              // MMM01 + RAM + BATTERY
+        case 0x0F: case 0x10:   // MBC3 + TIMER + BATTERY
+        case 0x13:              // MBC3 + RAM + BATTERY
+        case 0x1B: case 0x1E:   // MBC5 + RAM + BATTERY
+        case 0x22:              // MBC7
+        case 0xFF:              // HuC1
+            return true;
+        default:
+            return false;
     }
 }
 
@@ -72,13 +95,58 @@ Cartridge Cartridge::load(const std::string& path) {
         .mbcType  = mbcTypeFromByte(cart.m_rom[0x0147]),
         .romBytes = romSizeFromByte(cart.m_rom[0x0148]),
         .ramBytes = ramSizeFromByte(cart.m_rom[0x0149]),
+        .battery  = batteryFromByte(cart.m_rom[0x0147]),
     };
 
     cart.m_ram.assign(cart.m_header.mbcType == MBCType::MBC2 ? MBC2_RAM_BYTES
                                                              : cart.m_header.ramBytes,
                       0);
 
+    cart.m_savePath = std::filesystem::path(path).replace_extension(".sav").string();
+    cart.loadSave();
+
     return cart;
+}
+
+// ── Battery-backed saves ─────────────────────────────────────────────────────
+
+void Cartridge::loadSave() {
+    if (!m_header.battery || m_ram.empty()) return;
+
+    std::ifstream f(m_savePath, std::ios::binary | std::ios::ate);
+    if (!f.is_open()) return;  // no save yet is normal, not an error
+
+    const auto size = static_cast<std::size_t>(f.tellg());
+    f.seekg(0);
+
+    // Read what fits rather than rejecting outright: a size mismatch usually
+    // means the file came from another emulator with different padding.
+    if (size != m_ram.size())
+        std::cerr << "Warning: " << m_savePath << " is " << size
+                  << " bytes, expected " << m_ram.size() << "\n";
+
+    f.read(reinterpret_cast<char*>(m_ram.data()),
+           static_cast<std::streamsize>(std::min(size, m_ram.size())));
+}
+
+bool Cartridge::flushSave() {
+    if (!m_header.battery || m_ram.empty() || !m_ramDirty) return true;
+
+    std::ofstream f(m_savePath, std::ios::binary | std::ios::trunc);
+    if (!f.is_open()) {
+        std::cerr << "Warning: cannot write save file " << m_savePath << "\n";
+        return false;
+    }
+
+    f.write(reinterpret_cast<const char*>(m_ram.data()),
+            static_cast<std::streamsize>(m_ram.size()));
+    if (!f) {
+        std::cerr << "Warning: failed writing save file " << m_savePath << "\n";
+        return false;
+    }
+
+    m_ramDirty = false;
+    return true;
 }
 
 // ── Bank resolution ──────────────────────────────────────────────────────────
@@ -152,12 +220,14 @@ void Cartridge::writeRam(uint16_t addr, uint8_t val) {
 
     if (m_header.mbcType == MBCType::MBC2) {
         m_ram[(addr - 0xA000) % MBC2_RAM_BYTES] = static_cast<uint8_t>(val & 0x0F);
+        m_ramDirty = true;
         return;
     }
 
     const std::size_t off =
         (static_cast<std::size_t>(m_ramBank) * 0x2000 + (addr - 0xA000)) % m_ram.size();
     m_ram[off] = val;
+    m_ramDirty = true;
 }
 
 // ── Register writes ──────────────────────────────────────────────────────────

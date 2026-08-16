@@ -34,7 +34,8 @@ void printHeader(const CartridgeHeader& hdr) {
     std::cout << "Title:    " << hdr.title << "\n"
               << "MBC:      " << mbcTypeName(hdr.mbcType) << "\n"
               << "ROM size: " << hdr.romBytes / 1024 << " KB\n"
-              << "RAM size: " << hdr.ramBytes / 1024 << " KB\n";
+              << "RAM size: " << hdr.ramBytes / 1024 << " KB\n"
+              << "Battery:  " << (hdr.battery ? "yes" : "no") << "\n";
 }
 
 // Headless run that prints a Game Boy Doctor trace line before every
@@ -105,6 +106,11 @@ int runSDL(GameBoy& gb, const CartridgeHeader& hdr) {
     bool running = true;
     SDL_Event event;
 
+    // Cartridge RAM is flushed periodically as well as on exit, so a crash or a
+    // kill loses at most a couple of seconds of progress rather than the run.
+    constexpr int AUTOSAVE_FRAMES = 120;
+    int framesSinceSave = 0;
+
     while (running) {
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_QUIT) {
@@ -121,6 +127,11 @@ int runSDL(GameBoy& gb, const CartridgeHeader& hdr) {
 
         gb.runFrame();
 
+        if (++framesSinceSave >= AUTOSAVE_FRAMES) {
+            gb.flushSave();
+            framesSinceSave = 0;
+        }
+
         const auto& fb = gb.ppu().framebuffer();
         SDL_UpdateTexture(texture, nullptr, fb.data(),
                           GB_WIDTH * static_cast<int>(sizeof(uint32_t)));
@@ -130,6 +141,8 @@ int runSDL(GameBoy& gb, const CartridgeHeader& hdr) {
         SDL_RenderCopy(renderer, texture, nullptr, nullptr);
         SDL_RenderPresent(renderer);
     }
+
+    gb.flushSave();
 
     SDL_DestroyTexture(texture);
     SDL_DestroyRenderer(renderer);

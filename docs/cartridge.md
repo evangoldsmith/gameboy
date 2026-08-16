@@ -15,6 +15,9 @@ uint8_t read(uint16_t addr) const;
 void    write(uint16_t addr, uint8_t val);
 
 const CartridgeHeader& header() const;
+
+bool flushSave();                       // persist cartridge RAM if dirty
+const std::string& savePath() const;
 ```
 
 The constructor is private; `load` is the only way to build one. It returns by
@@ -32,6 +35,7 @@ its member with `m_cart(Cartridge::load(path))`.
 | `$0147` | Cartridge type → `MBCType` | `mbcTypeFromByte` |
 | `$0148` | ROM size | `romSizeFromByte` — `32 KB << b` |
 | `$0149` | RAM size | `ramSizeFromByte` — table lookup |
+| `$0147` | Battery present | `batteryFromByte` — see below |
 
 `ramSizeFromByte` is a lookup rather than a formula because the encoding is not
 monotonic: `$05` is 64 KB but `$04` is 128 KB.
@@ -112,6 +116,34 @@ a tick.
 9 bits of bank number across two registers, and **writing 0 genuinely selects
 bank 0** — the MBC1/MBC3 quirk is gone.
 
+## Battery-backed saves
+
+On a real cartridge the battery is not a feature — it is a coin cell soldered to
+the board, wired to the SRAM chip's power pin. SRAM is volatile, so without it
+the chip loses everything when the console is switched off.
+
+The important consequence for emulation: **the game does nothing special to
+save.** Writing your party to `$A000–$BFFF` is an ordinary RAM write,
+indistinguishable from a scratch write it intends to discard. The software
+cannot tell whether a battery is fitted. Persistence is a property of the power
+supply, not a behaviour.
+
+So all there is to emulate is "did those bytes survive to the next run", which
+reduces to a flag on the cartridge type and a file:
+
+- `batteryFromByte()` decodes `$0147`. Pokémon Red is `$13`, MBC3+RAM+BATTERY.
+- The save path is the ROM path with its extension replaced by `.sav`.
+- `loadSave()` runs at the end of `load()`. A missing file is normal, not an
+  error. A size mismatch warns and reads what fits, since that usually just
+  means the file came from another emulator with different padding.
+- `flushSave()` writes the whole RAM buffer, but only when `m_ramDirty` is set —
+  so calling it every couple of seconds costs nothing while the game is not
+  touching SRAM.
+
+`m_ramDirty` is set by `writeRam()`, the single place cartridge RAM changes.
+
+MBC2's in-chip RAM persists the same way; `$06` is MBC2+BATTERY.
+
 ## The bug this replaced
 
 Worth recording, because the symptom pointed somewhere else entirely.
@@ -134,21 +166,24 @@ during the intro. A single RAM-bank write was enough.
 
 ## Current state
 
-MBC1, MBC2, MBC3 and MBC5 are implemented, along with external RAM banking and
-the MBC3 clock registers.
+MBC1, MBC2, MBC3 and MBC5 are implemented, along with external RAM banking,
+battery-backed saves, and the MBC3 clock registers.
 
 Verified: `cpu_instrs` (MBC1) passes 11/11, Tetris (no MBC) is playable, and
 Pokémon Red (MBC3) reaches Prof. Oak's intro and the name entry screen.
+
+Saves were checked by round-trip: writing patterns to two different RAM banks,
+flushing, and reading them back from a fresh `GameBoy` instance. A non-battery
+ROM correctly writes no file, and Pokémon Red produces a 32 KB `.sav` during
+normal play.
 
 ## Not implemented yet
 
 - **The RTC does not tick.** MBC3's clock registers store and latch correctly,
   but nothing advances them, so a game reading the clock sees a stopped one.
   Pokémon Red is `MBC3+RAM+BATTERY` with no timer, so it is unaffected; Gold and
-  Silver would not be.
-- **No battery-backed saves.** `m_ram` is never written to a `.sav` file, and
-  the BATTERY flag in the header byte is not decoded, so progress is lost on
-  exit.
+  Silver would not be. The RTC is also not written to the `.sav` file, which
+  real cartridges do persist.
 - **MBC2 is untested** — no MBC2 ROM is available to check it against.
 - **No `std::variant` dispatch.** `roadmap.md` suggests modelling the mapper as
   `std::variant<NoMBC, MBC1, …>` with `std::visit`; this is a switch over an

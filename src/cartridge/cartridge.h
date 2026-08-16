@@ -12,10 +12,14 @@ struct CartridgeHeader {
     MBCType     mbcType;
     uint32_t    romBytes;  // total ROM size in bytes
     uint32_t    ramBytes;  // external RAM size in bytes
+    bool        battery;   // cartridge RAM survives power-off
 };
 
 // Decode header byte $0147 → MBCType
 MBCType mbcTypeFromByte(uint8_t b);
+
+// Decode header byte $0147 → is the cartridge RAM battery-backed?
+bool batteryFromByte(uint8_t b);
 
 // Decode header byte $0148 → ROM size in bytes
 uint32_t romSizeFromByte(uint8_t b);
@@ -33,8 +37,17 @@ public:
 
     const CartridgeHeader& header() const { return m_header; }
 
+    // Writes cartridge RAM to the .sav file. No-op unless the cartridge is
+    // battery-backed and RAM has changed since the last flush. Returns false
+    // if a write was attempted and failed.
+    bool flushSave();
+
+    const std::string& savePath() const { return m_savePath; }
+
 private:
     Cartridge() = default;
+
+    void loadSave();
 
     uint8_t  romByte(std::size_t offset) const;
     uint32_t romBankCount() const;
@@ -55,6 +68,9 @@ private:
     std::vector<uint8_t> m_rom;
     std::vector<uint8_t> m_ram;
     CartridgeHeader      m_header{};
+
+    std::string m_savePath;
+    bool        m_ramDirty{false};
 
     // Primary bank register. 5 bits on MBC1, 7 on MBC3, 9 on MBC5.
     uint16_t m_romBank{1};

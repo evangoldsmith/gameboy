@@ -59,6 +59,11 @@ wrong.
 Each iteration polls events, calls `gb.runFrame()`, uploads the PPU framebuffer
 with `SDL_UpdateTexture`, then clears and presents.
 
+`gb.flushSave()` runs every 120 frames and once more on exit, so a crash or a
+kill costs at most a couple of seconds rather than the whole run. It is a no-op
+unless the cartridge is battery-backed and RAM has actually changed — see
+[cartridge.md](cartridge.md).
+
 Key events are handled on both `SDL_KEYDOWN` and `SDL_KEYUP`, mapped through
 `buttonForKey()` into `Joypad::setButton()` — arrows for the D-pad, `Z`/`X` for
 A/B, `Enter`/`Backspace` for Start/Select, `Escape` to quit. See
