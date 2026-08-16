@@ -36,57 +36,120 @@ its member with `m_cart(Cartridge::load(path))`.
 `ramSizeFromByte` is a lookup rather than a formula because the encoding is not
 monotonic: `$05` is 64 KB but `$04` is 128 KB.
 
-External RAM is allocated from the header value, so `m_ram` is empty for
-cartridges that declare none.
+MBC2 is special-cased at load: its 512 half-bytes of RAM live inside the mapper
+chip, so the header reports none and the buffer is allocated anyway.
 
-## Banking
+## Reading
 
-Reads split at `$4000`:
+Two bank-resolution helpers keep `read()` short:
 
-- `$0000–$3FFF` — always bank 0, indexed directly.
-- `$4000–$7FFF` — `m_romBank % romBankCount()`, so a bank number past the end of
-  a small ROM wraps instead of reading out of bounds.
+- **`lowBank()`** — the bank behind `$0000–$3FFF`. Always 0 *except* in MBC1's
+  alternate mode, where the secondary register shifts up into the high bits and
+  exposes banks `$20`/`$40`/`$60` that are otherwise unreachable.
+- **`highBank()`** — the bank behind `$4000–$7FFF`.
 
-`romByte()` is the single bounds-checked accessor; anything past the end of the
-ROM reads `$FF`.
+Both take `% romBankCount()`, so a bank number past the end of a small ROM wraps
+instead of reading out of bounds. `romByte()` is the single bounds-checked
+accessor; anything past the end of the ROM reads `$FF`.
 
-### MBC1 register writes
+## Mapper differences
+
+`write()` routes to a per-mapper handler. The differences between them are
+small but not interchangeable — treating one as another is exactly the bug
+described at the bottom of this page.
+
+### MBC1
 
 | Range | Effect |
 |---|---|
-| `$0000–$1FFF` | RAM enable — `$0A` in the low nibble enables, anything else disables |
-| `$2000–$3FFF` | Low 5 bits of the ROM bank. **Writing 0 selects bank 1** |
-| `$4000–$5FFF` | 2 bits, written to both the RAM bank and ROM bank bits 5–6 |
-| `$6000–$7FFF` | Banking mode select — currently ignored |
+| `$0000–$1FFF` | RAM enable (`$0A` in the low nibble) |
+| `$2000–$3FFF` | Low **5 bits** of the ROM bank; writing 0 selects 1 |
+| `$4000–$5FFF` | 2 bits: upper ROM bits *or* RAM bank, depending on mode |
+| `$6000–$7FFF` | Mode select |
 
-The write-0-becomes-1 quirk is why MBC1 cannot reach banks `$20`, `$40`, and
-`$60`: those bank numbers have zero in the low five bits, so they alias to `$21`,
-`$41`, `$61`.
+The write-0-becomes-1 quirk is why MBC1 cannot reach banks `$20`, `$40` and
+`$60` in the default mode: their low five bits are zero, so they alias to `$21`,
+`$41`, `$61`. Mode 1 is the workaround, remapping the low ROM window instead.
 
-Cartridges reporting `MBCType::None` ignore all writes.
+### MBC2
 
-External RAM access is masked with `% m_ram.size()` so an out-of-range bank
-wraps rather than reading past the buffer. Reads return `$FF` when RAM is
-disabled or absent.
+The smallest mapper, and the only one where **bit 8 of the address** picks the
+register rather than the address range: `$0000–$3FFF` with bit 8 clear is RAM
+enable, with bit 8 set is a 4-bit ROM bank.
+
+Its RAM is 512 half-bytes mirrored across the whole window. Writes keep only the
+low nibble; reads OR in `$F0`, because the upper nibble is not wired up.
+
+### MBC3
+
+| Range | Effect |
+|---|---|
+| `$0000–$1FFF` | RAM and clock enable |
+| `$2000–$3FFF` | Full **7-bit** ROM bank in one register; writing 0 selects 1 |
+| `$4000–$5FFF` | `$00–$03` RAM bank, `$08–$0C` select a clock register |
+| `$6000–$7FFF` | Latch clock data |
+
+Two things distinguish it from MBC1, and both matter:
+
+- The bank number is **7 bits in a single register** — nothing is borrowed from
+  the secondary register.
+- `$4000–$5FFF` selects a RAM bank and **must not touch the ROM bank**.
+
+Writing `$08–$0C` maps a clock register over the RAM window instead of a RAM
+bank. The latch sequence (write `$00`, then `$01`) copies the running clock into
+a separate latched copy that reads observe, so a multi-byte read cannot straddle
+a tick.
+
+### MBC5
+
+| Range | Effect |
+|---|---|
+| `$0000–$1FFF` | RAM enable |
+| `$2000–$2FFF` | Low 8 bits of the ROM bank |
+| `$3000–$3FFF` | Bit 8 of the ROM bank |
+| `$4000–$5FFF` | 4-bit RAM bank |
+
+9 bits of bank number across two registers, and **writing 0 genuinely selects
+bank 0** — the MBC1/MBC3 quirk is gone.
+
+## The bug this replaced
+
+Worth recording, because the symptom pointed somewhere else entirely.
+
+Pokémon Red is MBC3 with 1 MB of ROM (64 banks) and 32 KB of save RAM (4 banks).
+It was originally running on the MBC1 code path, which did:
+
+```cpp
+m_romBank = (m_romBank & 0x1F) | (bits << 5);   // $4000-$5FFF
+```
+
+On MBC1 that register holds upper ROM bits. On MBC3 it is the RAM bank. So when
+the game selected **RAM bank 1**, the emulator added **32 to the ROM bank
+number** and execution continued in the wrong bank — producing
+`Illegal opcode $F4 at $60B6`, an address inside the switchable window.
+
+The obvious suspect was the 5-bit mask truncating banks above 31, but
+instrumenting the writes showed the game never requested a bank above `$1F`
+during the intro. A single RAM-bank write was enough.
 
 ## Current state
 
-Header parsing is complete for all five MBC types the enum knows about. Banking
-is **minimal MBC1 only** — enough for Blargg's `cpu_instrs`, which is itself an
-MBC1 ROM that switches banks to reach its 11 sub-tests.
+MBC1, MBC2, MBC3 and MBC5 are implemented, along with external RAM banking and
+the MBC3 clock registers.
 
-Verified working: `roms/cpu_instrs.gb` (MBC1, 64 KB).
+Verified: `cpu_instrs` (MBC1) passes 11/11, Tetris (no MBC) is playable, and
+Pokémon Red (MBC3) reaches Prof. Oak's intro and the name entry screen.
 
 ## Not implemented yet
 
-Everything here is roadmap Phase 9:
-
-- **MBC1 mode 1** (`$6000–$7FFF`), which reinterprets the 2-bit register as RAM
-  banking rather than upper ROM bits.
-- **MBC2, MBC3, MBC5.** `mbcTypeFromByte` identifies them but `write` treats them
-  all as MBC1. `roms/pokemon_red.gb` is MBC3 and will not run correctly.
-- **MBC3 RTC** — the latch sequence and the clock registers at `$A000–$BFFF`.
-- **Battery-backed saves.** `m_ram` is never persisted to a `.sav` file, and the
-  BATTERY flag in the header byte is not decoded.
-- **`std::variant<NoMBC, MBC1, …>` dispatch** as the roadmap suggests; the
-  current code is a single if-chain.
+- **The RTC does not tick.** MBC3's clock registers store and latch correctly,
+  but nothing advances them, so a game reading the clock sees a stopped one.
+  Pokémon Red is `MBC3+RAM+BATTERY` with no timer, so it is unaffected; Gold and
+  Silver would not be.
+- **No battery-backed saves.** `m_ram` is never written to a `.sav` file, and
+  the BATTERY flag in the header byte is not decoded, so progress is lost on
+  exit.
+- **MBC2 is untested** — no MBC2 ROM is available to check it against.
+- **No `std::variant` dispatch.** `roadmap.md` suggests modelling the mapper as
+  `std::variant<NoMBC, MBC1, …>` with `std::visit`; this is a switch over an
+  enum instead.

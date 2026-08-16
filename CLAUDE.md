@@ -60,12 +60,12 @@ When a doc and the code disagree, the code is right and the doc is a bug.
 
 ## Project State
 
-Roadmap Phases 0–8 are done, plus the piece of Phase 9 (minimal MBC1) needed to unblock them. **All 11 Blargg `cpu_instrs` sub-tests pass**, **Tetris is playable**, and **Pokémon Red boots to its title screen.**
+Roadmap Phases 0–9 are done. **All 11 Blargg `cpu_instrs` sub-tests pass**, **Tetris is playable**, and **Pokémon Red reaches the name entry screen.**
 
-- **Implemented**: full SM83 instruction set, interrupt dispatch, MMU routing with I/O dispatch, cartridge header parsing, minimal MBC1, serial with correct clock-source handling, the full DIV/TIMA timer, background/window/sprite rendering, OAM DMA, all five interrupts, joypad input, Game Boy Doctor trace logging.
+- **Implemented**: full SM83 instruction set, interrupt dispatch, MMU routing with I/O dispatch, cartridge header parsing, MBC1/2/3/5, serial with correct clock-source handling, the full DIV/TIMA timer, background/window/sprite rendering, OAM DMA, all five interrupts, joypad input, Game Boy Doctor trace logging.
 - **Stub**: `apu.{h,cpp}` is an empty include guard.
-- **No audio.** Phase 10 (APU) is the next big one.
-- **MBC3 is not implemented.** Pokémon Red runs on the MBC1 path, which truncates bank numbers above 31 and lets RAM-bank writes corrupt the ROM bank.
+- **No audio.** Phase 10 (APU) is next.
+- **No battery saves** — cartridge RAM is never persisted, so progress is lost on exit. The MBC3 RTC stores and latches but does not tick.
 - No tests exist beyond running test ROMs.
 
 Verify the CPU with:

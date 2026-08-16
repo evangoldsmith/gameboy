@@ -8,7 +8,7 @@ works, and what is not implemented yet.
 |---|---|---|
 | [cpu.md](cpu.md) | `src/cpu/cpu.{h,cpp}`, `src/cpu/opcodes.{h,cpp}` | Complete instruction set |
 | [mmu.md](mmu.md) | `src/memory/mmu.{h,cpp}` | Address routing + partial I/O dispatch |
-| [cartridge.md](cartridge.md) | `src/cartridge/cartridge.{h,cpp}` | Header parsing + minimal MBC1 |
+| [cartridge.md](cartridge.md) | `src/cartridge/cartridge.{h,cpp}` | Header parsing + MBC1/2/3/5 |
 | [ppu.md](ppu.md) | `src/ppu/ppu.{h,cpp}` | Background, window and sprite rendering |
 | [apu.md](apu.md) | `src/apu/apu.{h,cpp}` | **Stub** |
 | [timer.md](timer.md) | `src/timer.{h,cpp}` | DIV + TIMA with falling-edge clocking |
@@ -46,12 +46,11 @@ Passed all tests
 ```
 
 All three graphics layers render — background, window and sprites, with OAM
-DMA — and input works. **Tetris is playable start to finish, and Pokémon Red
-boots to its title screen.**
+DMA — input works, and MBC1/2/3/5 are implemented. **Tetris is playable, and
+Pokémon Red reaches Prof. Oak's intro and the name entry screen.**
 
-Next up is the rest of Phase 9 (MBC3 — Pokémon Red is currently being driven by
-the MBC1 code path, which truncates bank numbers above 31) and then Phase 10,
-the APU.
+Next up is Phase 10, the APU. Saves are still not persisted to disk, and the
+MBC3 real-time clock does not tick.
 
 `instr_timing`, `dmg-acid2`, and the Mooneye suite are not in `roms/`, so timer
 and PPU edge cases are implemented to spec but unverified beyond what
