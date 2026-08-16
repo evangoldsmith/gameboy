@@ -103,6 +103,7 @@ Wiring is complete for the components that exist.
 
 - **Sound channels 3 and 4** are missing from the APU — see [apu.md](apu.md).
 - **No frame-time pacing in the core.** `runFrame()` runs as fast as the host
-  allows; the frontend leans on SDL vsync instead. Real pacing is Phase 14.
+  allows; the frontend paces itself on the audio queue — see [main.md](main.md).
+  That is what makes headless harnesses run at full speed.
 - **No save states.** Phase 14.
 - **Cycle remainder is dropped** between frames rather than carried.

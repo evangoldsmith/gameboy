@@ -125,10 +125,26 @@ int runSDL(GameBoy& gb, const CartridgeHeader& hdr) {
 
     const SDL_AudioDeviceID audio = openAudio();
 
-    // Drop samples rather than let the queue grow without bound: if emulation
-    // outruns playback the backlog becomes audible latency.
-    const uint32_t maxQueuedBytes =
-        static_cast<uint32_t>(APU::SAMPLE_RATE * APU::CHANNELS * sizeof(int16_t) / 8);
+    // ── Frame pacing ─────────────────────────────────────────────────────────
+    // Vsync alone cannot pace emulation: the Game Boy runs at 59.73 Hz, so on a
+    // 120 Hz display it produces frames at almost exactly double speed. That
+    // makes music play fast and overruns the audio queue, and dropping the
+    // excess samples is what turns the overrun into audible distortion.
+    //
+    // The audio device is the reliable clock — it consumes exactly SAMPLE_RATE
+    // samples a second regardless of the display — so we gate frame production
+    // on how much audio is still queued. Vsync stays enabled to avoid tearing;
+    // it only quantises when a finished frame is shown, not how fast the
+    // emulator runs.
+    const uint32_t bytesPerAudioFrame = static_cast<uint32_t>(
+        static_cast<uint64_t>(APU::SAMPLE_RATE) * APU::CHANNELS * sizeof(int16_t) *
+        GameBoy::TCYCLES_PER_FRAME / 4194304);
+    const uint32_t targetQueuedBytes = bytesPerAudioFrame * 4;  // ~67 ms of latency
+
+    // Wall-clock fallback for when no audio device could be opened.
+    const uint64_t perfFreq   = SDL_GetPerformanceFrequency();
+    const uint64_t frameTicks = perfFreq * GameBoy::TCYCLES_PER_FRAME / 4194304;
+    uint64_t nextFrameAt = SDL_GetPerformanceCounter() + frameTicks;
 
     bool running = true;
     SDL_Event event;
@@ -154,9 +170,10 @@ int runSDL(GameBoy& gb, const CartridgeHeader& hdr) {
 
         gb.runFrame();
 
+        // Queue every sample. With pacing below the queue cannot run away, so
+        // there is nothing to drop.
         const auto& audioSamples = gb.apu().samples();
-        if (audio != 0 && !audioSamples.empty() &&
-            SDL_GetQueuedAudioSize(audio) < maxQueuedBytes) {
+        if (audio != 0 && !audioSamples.empty()) {
             SDL_QueueAudio(audio, audioSamples.data(),
                            static_cast<uint32_t>(audioSamples.size() * sizeof(int16_t)));
         }
@@ -175,6 +192,15 @@ int runSDL(GameBoy& gb, const CartridgeHeader& hdr) {
         SDL_RenderClear(renderer);
         SDL_RenderCopy(renderer, texture, nullptr, nullptr);
         SDL_RenderPresent(renderer);
+
+        if (audio != 0) {
+            // Hold off until the device has drained back to the target depth.
+            // This is what actually sets the emulator's speed.
+            while (SDL_GetQueuedAudioSize(audio) > targetQueuedBytes) SDL_Delay(1);
+        } else {
+            while (SDL_GetPerformanceCounter() < nextFrameAt) SDL_Delay(1);
+            nextFrameAt += frameTicks;
+        }
     }
 
     gb.flushSave();

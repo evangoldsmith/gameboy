@@ -69,10 +69,35 @@ on SDL's audio thread and would need a lock-free ring buffer between it and the
 emulation thread; queueing is thread-safe on its own, so the frontend can simply
 push whatever the APU produced after each `runFrame()`.
 
-The cost is that queue depth is the only backpressure. If emulation outruns
-playback the backlog becomes audible latency, so the frontend stops queueing
-once more than about an eighth of a second is buffered and drops those samples
-instead.
+Every sample is queued — nothing is dropped, because the pacing below stops the
+queue from running away in the first place.
+
+### Frame pacing
+
+**Vsync cannot pace emulation.** The Game Boy runs at 59.73 Hz, so on a 120 Hz
+display a vsync-driven loop runs the emulator at almost exactly *double* speed.
+That was a real bug: music played twice as fast, and the APU then produced
+about 96000 samples a second against the device's 48000, overrunning the queue.
+Dropping the excess is what turned the overrun into audible distortion.
+
+The audio device is the reliable clock. It consumes exactly `SAMPLE_RATE`
+samples per second no matter what the display is doing, so the loop gates on
+queue depth:
+
+```cpp
+while (SDL_GetQueuedAudioSize(audio) > targetQueuedBytes) SDL_Delay(1);
+```
+
+`targetQueuedBytes` is four frames' worth, about 67 ms of latency. Measured over
+15 seconds this holds **1.003×** real speed with the queue stable at the target
+— roughly 5 cents of pitch error, inaudible.
+
+Vsync stays enabled. It no longer sets the pace, it only quantises *when* a
+finished frame is shown, which avoids tearing without affecting emulation speed.
+
+When no audio device could be opened there is a wall-clock fallback using
+`SDL_GetPerformanceCounter`, since vsync alone would otherwise run at double
+speed again.
 
 ### Saves
 
@@ -108,10 +133,9 @@ is the `SDL_UpdateTexture` call itself. Run `make run` to confirm.
 
 ## Not implemented yet
 
-- **No frame pacing beyond vsync.** On a 120 Hz display the emulator runs about
-  twice too fast, since nothing throttles to 59.7 Hz.
+- **Pacing granularity is `SDL_Delay(1)`**, which is why the measured rate is
+  1.003× rather than exactly 1.000×.
 - **Key bindings are compile-time constants**, and there is no gamepad support.
-- **Audio is frame-paced**, not streamed, and samples are dropped rather than
-  the emulator being slowed when the queue fills.
+- **No fast-forward, pause or frame-advance.** Phase 14.
 - **No configuration** — scale, key bindings, and palette are all compile-time
   constants.
