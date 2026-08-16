@@ -4,6 +4,7 @@
 #include <SDL2/SDL.h>
 #include <cstdlib>
 #include <iostream>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -12,6 +13,22 @@ namespace {
 constexpr int GB_WIDTH  = PPU::WIDTH;
 constexpr int GB_HEIGHT = PPU::HEIGHT;
 constexpr int SCALE     = 4;
+
+// Keyboard layout: arrows for the D-pad, Z/X for A/B, Enter/Backspace for
+// Start/Select. Escape quits.
+std::optional<Button> buttonForKey(SDL_Keycode key) {
+    switch (key) {
+        case SDLK_RIGHT:     return Button::Right;
+        case SDLK_LEFT:      return Button::Left;
+        case SDLK_UP:        return Button::Up;
+        case SDLK_DOWN:      return Button::Down;
+        case SDLK_z:         return Button::A;
+        case SDLK_x:         return Button::B;
+        case SDLK_RETURN:    return Button::Start;
+        case SDLK_BACKSPACE: return Button::Select;
+        default:             return std::nullopt;
+    }
+}
 
 void printHeader(const CartridgeHeader& hdr) {
     std::cout << "Title:    " << hdr.title << "\n"
@@ -92,9 +109,13 @@ int runSDL(GameBoy& gb, const CartridgeHeader& hdr) {
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_QUIT) {
                 running = false;
-            } else if (event.type == SDL_KEYDOWN &&
-                       event.key.keysym.sym == SDLK_ESCAPE) {
-                running = false;
+            } else if (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) {
+                const SDL_Keycode key = event.key.keysym.sym;
+                if (key == SDLK_ESCAPE) {
+                    running = false;
+                } else if (const auto button = buttonForKey(key)) {
+                    gb.joypad().setButton(*button, event.type == SDL_KEYDOWN);
+                }
             }
         }
 

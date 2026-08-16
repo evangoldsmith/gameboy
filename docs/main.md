@@ -56,9 +56,13 @@ the loop spinning at whatever speed the host manages.
 is `"0"` for nearest-neighbour — bilinear filtering on a 160×144 source looks
 wrong.
 
-Each iteration polls events (quit on window close or Escape), calls
-`gb.runFrame()`, uploads the PPU framebuffer with `SDL_UpdateTexture`, then
-clears and presents. Cleanup tears down the texture, renderer, and window in
+Each iteration polls events, calls `gb.runFrame()`, uploads the PPU framebuffer
+with `SDL_UpdateTexture`, then clears and presents.
+
+Key events are handled on both `SDL_KEYDOWN` and `SDL_KEYUP`, mapped through
+`buttonForKey()` into `Joypad::setButton()` — arrows for the D-pad, `Z`/`X` for
+A/B, `Enter`/`Backspace` for Start/Select, `Escape` to quit. See
+[joypad.md](joypad.md). Cleanup tears down the texture, renderer, and window in
 reverse order of creation.
 
 The framebuffer is `std::array<uint32_t, 160*144>` in ARGB8888, which matches
@@ -84,7 +88,7 @@ is the `SDL_UpdateTexture` call itself. Run `make run` to confirm.
 
 - **No frame pacing beyond vsync.** On a 120 Hz display the emulator runs about
   twice too fast, since nothing throttles to 59.7 Hz.
-- **No input handling** beyond quit — see [joypad.md](joypad.md).
+- **Key bindings are compile-time constants**, and there is no gamepad support.
 - **No audio.** `SDL_INIT_VIDEO` only; no audio device is opened.
 - **No configuration** — scale, key bindings, and palette are all compile-time
   constants.

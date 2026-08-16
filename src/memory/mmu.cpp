@@ -8,6 +8,7 @@ constexpr uint16_t REG_DIV  = 0xFF04;  // Divider
 constexpr uint16_t REG_TIMA = 0xFF05;  // Timer counter
 constexpr uint16_t REG_TMA  = 0xFF06;  // Timer modulo
 constexpr uint16_t REG_TAC  = 0xFF07;  // Timer control
+constexpr uint16_t REG_P1   = 0xFF00;  // Joypad
 constexpr uint16_t REG_IF   = 0xFF0F;  // Interrupt flags
 
 constexpr uint16_t REG_DMA = 0xFF46;  // OAM DMA source
@@ -20,8 +21,8 @@ constexpr bool isPpuReg(uint16_t addr) {
 }
 }  // namespace
 
-MMU::MMU(Cartridge& cart, Serial& serial, Timer& timer, PPU& ppu)
-    : m_cart(cart), m_serial(serial), m_timer(timer), m_ppu(ppu) {}
+MMU::MMU(Cartridge& cart, Serial& serial, Timer& timer, PPU& ppu, Joypad& joypad)
+    : m_cart(cart), m_serial(serial), m_timer(timer), m_ppu(ppu), m_joypad(joypad) {}
 
 uint8_t MMU::read(uint16_t addr) {
     // $0000–$7FFF: Cartridge ROM
@@ -127,6 +128,7 @@ void MMU::write(uint16_t addr, uint8_t val) {
 
 uint8_t MMU::readIO(uint16_t addr) {
     switch (addr) {
+        case REG_P1:   return m_joypad.read();
         case REG_SB:   return m_serial.readSB();
         case REG_SC:   return m_serial.readSC();
         case REG_DIV:  return m_timer.div();
@@ -152,6 +154,7 @@ void MMU::oamDma(uint8_t srcHigh) {
 
 void MMU::writeIO(uint16_t addr, uint8_t val) {
     switch (addr) {
+        case REG_P1:  m_joypad.write(val);   break;
         case REG_SB:  m_serial.writeSB(val); break;
         case REG_SC:  m_serial.writeSC(val); break;
         case REG_DIV:  m_timer.resetDiv();     break;  // any write resets it

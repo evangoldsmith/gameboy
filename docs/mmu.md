@@ -7,8 +7,8 @@ to the right component based on the address. Owns the memory regions that do not
 belong to any other component: WRAM, HRAM, the flat I/O array, and the IE
 register. **VRAM and OAM belong to the PPU** — the MMU only routes to them.
 
-The MMU holds references to `Cartridge`, `Serial`, `Timer`, and `PPU`. It does
-not own them — `GameBoy` does.
+The MMU holds references to `Cartridge`, `Serial`, `Timer`, `PPU`, and
+`Joypad`. It does not own them — `GameBoy` does.
 
 ## Public API
 
@@ -56,6 +56,7 @@ registers nothing responds to yet.
 
 | Register | Read | Write |
 |---|---|---|
+| `$FF00` P1 | `Joypad::read()` | `Joypad::write()` — only bits 4–5 |
 | `$FF01` SB | `Serial::readSB()` | `Serial::writeSB()` |
 | `$FF02` SC | `Serial::readSC()` | `Serial::writeSC()` — triggers the transfer |
 | `$FF04` DIV | `Timer::div()` | `Timer::resetDiv()` — any value resets it |
@@ -106,5 +107,4 @@ currently have a live component behind them.
   restrict the CPU to HRAM while it runs.
 - **No access restrictions.** VRAM and OAM are readable at all times; hardware
   blocks them during PPU modes 2 and 3.
-- **No APU or joypad registers** — `$FF00` and `$FF10–$FF3F` are inert array
-  slots.
+- **No APU registers** — `$FF10–$FF3F` are inert array slots.

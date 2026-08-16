@@ -3,6 +3,7 @@
 
 #include "cartridge/cartridge.h"
 #include "cpu/cpu.h"
+#include "joypad.h"
 #include "memory/mmu.h"
 #include "ppu/ppu.h"
 #include "serial.h"
@@ -32,6 +33,7 @@ public:
     MMU&       mmu()       { return m_mmu; }
     Serial&    serial()    { return m_serial; }
     PPU&       ppu()       { return m_ppu; }
+    Joypad&    joypad()    { return m_joypad; }
 
 private:
     void requestInterrupt(Interrupt which);
@@ -42,6 +44,7 @@ private:
     Serial    m_serial;
     Timer     m_timer;
     PPU       m_ppu;
+    Joypad    m_joypad;
     MMU       m_mmu;
     CPU       m_cpu;
 };

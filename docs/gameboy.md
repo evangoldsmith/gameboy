@@ -20,6 +20,7 @@ const CPU& cpu() const;
 MMU&       mmu();
 Serial&    serial();
 PPU&       ppu();
+Joypad&    joypad();
 
 static constexpr uint32_t TCYCLES_PER_FRAME = 70224;   // 154 lines x 456 dots
 ```
@@ -34,7 +35,8 @@ Cartridge  m_cart      // no dependencies
 Serial     m_serial
 Timer      m_timer
 PPU        m_ppu
-MMU        m_mmu       // needs cart, serial, timer, ppu
+Joypad     m_joypad
+MMU        m_mmu       // needs cart, serial, timer, ppu, joypad
 CPU        m_cpu       // needs mmu
 ```
 
@@ -77,6 +79,7 @@ if (m_ppu.takeVBlankIrq()) requestInterrupt(Interrupt::VBlank);
 if (m_ppu.takeStatIrq())   requestInterrupt(Interrupt::LCDStat);
 if (m_timer.takeIrq())     requestInterrupt(Interrupt::Timer);
 if (m_serial.takeIrq())    requestInterrupt(Interrupt::Serial);
+if (m_joypad.takeIrq())    requestInterrupt(Interrupt::Joypad);
 ```
 
 This keeps dependencies one-directional — no peripheral needs an MMU reference,
@@ -95,7 +98,7 @@ Wiring is complete for the components that exist.
 
 ## Not implemented yet
 
-- **No APU or Joypad members** — those components are still stubs.
+- **No APU member** — that component is still a stub.
 - **No frame-time pacing in the core.** `runFrame()` runs as fast as the host
   allows; the frontend leans on SDL vsync instead. Real pacing is Phase 14.
 - **No save states.** Phase 14.

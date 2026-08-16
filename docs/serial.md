@@ -27,7 +27,23 @@ void setEcho(bool on);               // mirror to stdout, default true
 `writeSB` just stores the byte.
 
 `writeSC` is where everything happens. Bit 7 starts a transfer and bit 0
-selects the internal clock. When bit 7 is set:
+selects the clock source. **Both must be set** for anything to happen:
+
+```cpp
+if ((val & 0x81) == 0x81) { ... }
+```
+
+With no cable attached, only an *internally* clocked transfer can complete — the
+console drives the clock itself and shifts in `$FF`. An **external**-clock
+transfer waits for a partner to supply the clock, so with nothing connected it
+stays pending forever and never raises an interrupt.
+
+Checking only bit 7 makes every transfer succeed, which looks to the ROM like a
+phantom partner replying. That is enough to strand a game: Tetris polls the link
+port with the external clock on its title screen, and completing those transfers
+kept it in link negotiation instead of starting a one-player game.
+
+When both bits are set:
 
 1. The current SB byte is appended to `m_output`.
 2. If echo is on, it is written to stdout and flushed immediately — unbuffered,
@@ -54,14 +70,14 @@ when the run ends.
 ## Current state
 
 Output capture works. Verified against `roms/cpu_instrs.gb`, which prints its
-banner and per-sub-test results this way.
+banner and per-sub-test results this way. External-clock transfers correctly
+hang pending, verified against Tetris.
 
 ## Not implemented yet
 
-- **No transfer timing.** Bytes complete in zero cycles instead of taking 8
-  shifts at 8192 Hz. Roadmap Phase 13.
-- **No external clock mode** (SC bit 0 clear), which on hardware waits
-  indefinitely for a partner console to supply the clock.
-- **No link cable emulation** — nothing to connect to.
+- **No transfer timing.** Internally clocked bytes complete in zero cycles
+  instead of taking 8 shifts at 8192 Hz. Roadmap Phase 13.
+- **No link cable emulation** — nothing to connect to, so an external-clock
+  transfer never completes rather than ever receiving real data.
 - **Input is always `$FF`.** A ROM that expects a real partner sees a
   disconnected cable.

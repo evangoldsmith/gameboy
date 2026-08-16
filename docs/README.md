@@ -12,7 +12,7 @@ works, and what is not implemented yet.
 | [ppu.md](ppu.md) | `src/ppu/ppu.{h,cpp}` | Background, window and sprite rendering |
 | [apu.md](apu.md) | `src/apu/apu.{h,cpp}` | **Stub** |
 | [timer.md](timer.md) | `src/timer.{h,cpp}` | DIV + TIMA with falling-edge clocking |
-| [joypad.md](joypad.md) | `src/joypad.{h,cpp}` | **Stub** |
+| [joypad.md](joypad.md) | `src/joypad.{h,cpp}` | Full button matrix + interrupt |
 | [serial.md](serial.md) | `src/serial.{h,cpp}` | Output capture working |
 | [gameboy.md](gameboy.md) | `src/gameboy.{h,cpp}` | Wiring + step/frame loop |
 | [logger.md](logger.md) | `src/debug/logger.{h,cpp}` | Game Boy Doctor trace format |
@@ -46,11 +46,12 @@ Passed all tests
 ```
 
 All three graphics layers render — background, window and sprites, with OAM
-DMA. **Pokémon Red boots to its title screen correctly.**
+DMA — and input works. **Tetris is playable start to finish, and Pokémon Red
+boots to its title screen.**
 
-Next up is Phase 8 (joypad input, which makes games actually playable) and the
-rest of Phase 9 (MBC3 — Pokémon Red is currently being driven by the MBC1 code
-path, which truncates bank numbers above 31).
+Next up is the rest of Phase 9 (MBC3 — Pokémon Red is currently being driven by
+the MBC1 code path, which truncates bank numbers above 31) and then Phase 10,
+the APU.
 
 `instr_timing`, `dmg-acid2`, and the Mooneye suite are not in `roms/`, so timer
 and PPU edge cases are implemented to spec but unverified beyond what
