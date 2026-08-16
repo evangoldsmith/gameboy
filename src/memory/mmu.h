@@ -21,6 +21,7 @@ public:
 private:
     uint8_t readIO(uint16_t addr);
     void    writeIO(uint16_t addr, uint8_t val);
+    void    oamDma(uint8_t srcHigh);
 
     Cartridge& m_cart;
     Serial&    m_serial;

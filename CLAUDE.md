@@ -60,11 +60,12 @@ When a doc and the code disagree, the code is right and the doc is a bug.
 
 ## Project State
 
-Roadmap Phases 0–6 are done, plus pieces of 7–9 that were needed to unblock them. **All 11 Blargg `cpu_instrs` sub-tests pass**, and the results screen renders.
+Roadmap Phases 0–7 are done, plus the piece of Phase 9 (minimal MBC1) needed to unblock them. **All 11 Blargg `cpu_instrs` sub-tests pass**, and **Pokémon Red boots to its title screen.**
 
-- **Implemented**: full SM83 instruction set, interrupt dispatch, MMU routing with partial I/O dispatch, cartridge header parsing, minimal MBC1, serial output capture, the full DIV/TIMA timer, background rendering with VBlank and STAT interrupts, Game Boy Doctor trace logging.
+- **Implemented**: full SM83 instruction set, interrupt dispatch, MMU routing with partial I/O dispatch, cartridge header parsing, minimal MBC1, serial output capture, the full DIV/TIMA timer, background/window/sprite rendering, OAM DMA, VBlank and STAT interrupts, Game Boy Doctor trace logging.
 - **Stubs**: `apu.{h,cpp}` and `joypad.{h,cpp}` are empty include guards.
-- **No sprites, no window layer, no input, no audio.** Phase 7 is next.
+- **No input and no audio.** Phase 8 (joypad) is next.
+- **MBC3 is not implemented.** Pokémon Red runs on the MBC1 path, which truncates bank numbers above 31 and lets RAM-bank writes corrupt the ROM bank.
 - No tests exist beyond running test ROMs.
 
 Verify the CPU with:

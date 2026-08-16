@@ -63,10 +63,31 @@ registers nothing responds to yet.
 | `$FF06` TMA | `Timer::tma()` | `Timer::writeTma()` |
 | `$FF07` TAC | `Timer::tac()` | `Timer::writeTac()` — can trigger a TIMA edge |
 | `$FF0F` IF | `m_io` with the top 3 bits forced to 1 | `m_io` |
-| `$FF40–$FF45`, `$FF47` | `PPU::readReg()` | `PPU::writeReg()` |
+| `$FF40–$FF4B` except `$FF46` | `PPU::readReg()` | `PPU::writeReg()` |
+| `$FF46` DMA | last source byte written | `oamDma()` — see below |
 
 The PPU register range is matched by an `isPpuReg()` helper in the `default`
 branch rather than one case per address, since the PPU decodes them itself.
+
+## OAM DMA
+
+`$FF46` sits in the middle of the PPU's register range but is handled here,
+because it is the one LCD register that reads from arbitrary memory — only the
+MMU can reach the whole address space.
+
+Writing `$XX` copies `$XX00–$XX9F` into OAM:
+
+```cpp
+for (uint16_t i = 0; i < 0xA0; ++i)
+    m_ppu.writeOam(0xFE00 + i, read(src + i));
+```
+
+On hardware the copy takes 160 M-cycles, during which the CPU can only reach
+HRAM. Games therefore copy a small trigger routine into HRAM and spin there
+until it finishes. **Copying instantly is invisible to that pattern** — the
+routine still runs, it just waits on an already-completed transfer — so games
+work correctly. Real DMA timing, and blocking non-HRAM access during it, is a
+later accuracy pass.
 
 IF reads back with bits 5–7 set because those bits do not exist in hardware and
 always read as 1. Some test ROMs check this.
@@ -81,9 +102,9 @@ currently have a live component behind them.
 - **No boot ROM overlay.** `$FF50` is written once at CPU construction to mark
   the boot ROM as unmapped, and `$0000–$00FF` always reads cartridge ROM. Phase
   6/13 adds the real 256-byte overlay.
-- **No OAM DMA** (`$FF46`). Writes currently land in `m_io` and do nothing.
-  Phase 7.
+- **OAM DMA is instantaneous** rather than taking 160 M-cycles, and does not
+  restrict the CPU to HRAM while it runs.
 - **No access restrictions.** VRAM and OAM are readable at all times; hardware
   blocks them during PPU modes 2 and 3.
 - **No APU or joypad registers** — `$FF00` and `$FF10–$FF3F` are inert array
-  slots, as are `$FF48–$FF4B` (sprite palettes and window position).
+  slots.

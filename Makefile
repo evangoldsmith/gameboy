@@ -14,7 +14,7 @@ CMAKE       := cmake
 CMAKE_FLAGS := -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
 BINARY      := gameboy
-ROM         ?= roms/cpu_instrs.gb
+ROM         ?= roms/tetris.gb
 
 # ── Default target ─────────────────────────────────────────────────────────────
 .PHONY: all

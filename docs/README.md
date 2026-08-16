@@ -9,7 +9,7 @@ works, and what is not implemented yet.
 | [cpu.md](cpu.md) | `src/cpu/cpu.{h,cpp}`, `src/cpu/opcodes.{h,cpp}` | Complete instruction set |
 | [mmu.md](mmu.md) | `src/memory/mmu.{h,cpp}` | Address routing + partial I/O dispatch |
 | [cartridge.md](cartridge.md) | `src/cartridge/cartridge.{h,cpp}` | Header parsing + minimal MBC1 |
-| [ppu.md](ppu.md) | `src/ppu/ppu.{h,cpp}` | Background rendering; no sprites or window |
+| [ppu.md](ppu.md) | `src/ppu/ppu.{h,cpp}` | Background, window and sprite rendering |
 | [apu.md](apu.md) | `src/apu/apu.{h,cpp}` | **Stub** |
 | [timer.md](timer.md) | `src/timer.{h,cpp}` | DIV + TIMA with falling-edge clocking |
 | [joypad.md](joypad.md) | `src/joypad.{h,cpp}` | **Stub** |
@@ -45,13 +45,15 @@ cpu_instrs
 Passed all tests
 ```
 
-The background layer also renders. Running `cpu_instrs` headlessly for 4000
-frames and dumping the framebuffer produces the full results screen, so tile
-maps, both tile-data addressing modes, palette mapping, and scrolling all work.
+All three graphics layers render — background, window and sprites, with OAM
+DMA. **Pokémon Red boots to its title screen correctly.**
 
-Next up is Phase 7 — sprites, the window layer, and OAM DMA, whose milestone is
-the `dmg-acid2` test. `instr_timing`, `dmg-acid2`, and the Mooneye suite are not
-in `roms/`, so timer and PPU edge cases are implemented to spec but unverified
-beyond what `cpu_instrs` exercises.
+Next up is Phase 8 (joypad input, which makes games actually playable) and the
+rest of Phase 9 (MBC3 — Pokémon Red is currently being driven by the MBC1 code
+path, which truncates bank numbers above 31).
+
+`instr_timing`, `dmg-acid2`, and the Mooneye suite are not in `roms/`, so timer
+and PPU edge cases are implemented to spec but unverified beyond what
+`cpu_instrs` and real games exercise.
 
 See `roadmap.md` for the phase plan this is tracking against.

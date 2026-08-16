@@ -10,14 +10,13 @@ constexpr uint16_t REG_TMA  = 0xFF06;  // Timer modulo
 constexpr uint16_t REG_TAC  = 0xFF07;  // Timer control
 constexpr uint16_t REG_IF   = 0xFF0F;  // Interrupt flags
 
-// $FF40–$FF45 and $FF47 belong to the PPU. $FF46 (OAM DMA) and $FF48–$FF4B
-// (sprite palettes, window position) are still inert array slots — Phase 7.
-constexpr uint16_t PPU_REG_FIRST = 0xFF40;
-constexpr uint16_t PPU_REG_LAST  = 0xFF45;
-constexpr uint16_t REG_BGP       = 0xFF47;
+constexpr uint16_t REG_DMA = 0xFF46;  // OAM DMA source
 
+// $FF40–$FF45 and $FF47–$FF4B belong to the PPU. $FF46 sits in the middle of
+// that range but stays here: it copies from anywhere in the address space, so
+// only the MMU can service it.
 constexpr bool isPpuReg(uint16_t addr) {
-    return (addr >= PPU_REG_FIRST && addr <= PPU_REG_LAST) || addr == REG_BGP;
+    return addr >= 0xFF40 && addr <= 0xFF4B && addr != REG_DMA;
 }
 }  // namespace
 
@@ -141,6 +140,16 @@ uint8_t MMU::readIO(uint16_t addr) {
     }
 }
 
+// Writing $XX to $FF46 copies $XX00-$XX9F into OAM. On hardware this takes 160
+// M-cycles, during which the CPU can only reach HRAM — which is why games run
+// the trigger routine from HRAM and spin there. Copying instantly is invisible
+// to that pattern; real DMA timing is a later accuracy pass.
+void MMU::oamDma(uint8_t srcHigh) {
+    const uint16_t src = static_cast<uint16_t>(static_cast<unsigned>(srcHigh) << 8);
+    for (uint16_t i = 0; i < 0xA0; ++i)
+        m_ppu.writeOam(static_cast<uint16_t>(0xFE00 + i), read(static_cast<uint16_t>(src + i)));
+}
+
 void MMU::writeIO(uint16_t addr, uint8_t val) {
     switch (addr) {
         case REG_SB:  m_serial.writeSB(val); break;
@@ -149,6 +158,10 @@ void MMU::writeIO(uint16_t addr, uint8_t val) {
         case REG_TIMA: m_timer.writeTima(val); break;
         case REG_TMA:  m_timer.writeTma(val);  break;
         case REG_TAC:  m_timer.writeTac(val);  break;
+        case REG_DMA:
+            m_io[REG_DMA - 0xFF00] = val;  // reads back the last source written
+            oamDma(val);
+            break;
         default:
             if (isPpuReg(addr)) m_ppu.writeReg(addr, val);
             else                m_io[addr - 0xFF00] = val;
