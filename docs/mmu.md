@@ -64,12 +64,18 @@ registers nothing responds to yet.
 | `$FF06` TMA | `Timer::tma()` | `Timer::writeTma()` |
 | `$FF07` TAC | `Timer::tac()` | `Timer::writeTac()` — can trigger a TIMA edge |
 | `$FF0F` IF | `m_io` with the top 3 bits forced to 1 | `m_io` |
-| `$FF10–$FF26`, `$FF30–$FF3F` | `APU::readReg()` | `APU::writeReg()` |
+| `$FF10–$FF3F` | `APU::readReg()` | `APU::writeReg()` |
 | `$FF40–$FF4B` except `$FF46` | `PPU::readReg()` | `PPU::writeReg()` |
 | `$FF46` DMA | last source byte written | `oamDma()` — see below |
 
-The PPU register range is matched by an `isPpuReg()` helper in the `default`
-branch rather than one case per address, since the PPU decodes them itself.
+The PPU and APU ranges are matched by `isPpuReg()`/`isApuReg()` helpers in the
+`default` branch rather than one case per address, since each component decodes
+its own registers.
+
+`isApuReg()` covers the whole `$FF10–$FF3F` block including the unused gap at
+`$FF27–$FF2F`. Those addresses have no register behind them but must still read
+as `$FF`; excluding them let them fall through to `m_io` and read back `$00`,
+which failed Blargg's `dmg_sound` `01-registers`.
 
 ## OAM DMA
 

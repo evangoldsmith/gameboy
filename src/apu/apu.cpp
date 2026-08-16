@@ -165,8 +165,20 @@ void APU::writeReg(uint16_t addr, uint8_t val) {
         return;
     }
 
-    // While powered off the registers are read-only.
-    if (!m_powered) return;
+    if (!m_powered) {
+        // Almost everything is read-only while the APU is off — but on DMG the
+        // length counters are not. They survive a power cycle and stay
+        // writable through the NRx1 load registers, which is what Blargg's
+        // "powering off shouldn't affect NR41" check is looking for.
+        switch (addr) {
+            case 0xFF11: m_ch1.writeLengthLoad(val); break;
+            case 0xFF16: m_ch2.writeLengthLoad(val); break;
+            case 0xFF1B: m_ch3.writeLengthLoad(val); break;
+            case 0xFF20: m_ch4.writeLengthLoad(val); break;
+            default: break;
+        }
+        return;
+    }
 
     switch (addr) {
         case REG_NR50: m_nr50 = val; return;

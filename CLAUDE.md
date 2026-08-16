@@ -76,7 +76,7 @@ Roadmap Phases 0–11 are done. **All 11 Blargg `cpu_instrs` sub-tests pass**, *
 | `instr_timing` | pass |
 | `halt_bug` | pass |
 | `dmg-acid2` | pixel perfect |
-| `dmg_sound` | 4 / 12 |
+| `dmg_sound` | 7 / 12 |
 | `oam_bug` | 2 / 8 |
 | `mem_timing` | 0 / 3 |
 

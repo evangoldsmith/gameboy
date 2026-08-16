@@ -13,10 +13,11 @@ constexpr uint16_t REG_IF   = 0xFF0F;  // Interrupt flags
 
 constexpr uint16_t REG_DMA = 0xFF46;  // OAM DMA source
 
-// $FF10-$FF26 are the sound registers, $FF30-$FF3F is wave RAM. The gap between
-// them is unused.
+// $FF10-$FF26 are the sound registers and $FF30-$FF3F is wave RAM. The gap at
+// $FF27-$FF2F is unused but still belongs to the APU: those addresses read as
+// $FF, which they would not do if they fell through to the flat I/O array.
 constexpr bool isApuReg(uint16_t addr) {
-    return (addr >= 0xFF10 && addr <= 0xFF26) || (addr >= 0xFF30 && addr <= 0xFF3F);
+    return addr >= 0xFF10 && addr <= 0xFF3F;
 }
 
 // $FF40–$FF45 and $FF47–$FF4B belong to the PPU. $FF46 sits in the middle of

@@ -162,7 +162,7 @@ void PulseChannel::writeReg(int idx, uint8_t val) {
             break;
         case 1:
             m_nrx1 = val;
-            m_lengthCounter = static_cast<uint8_t>(64 - (val & 0x3F));
+            writeLengthLoad(val);
             break;
         case 2:
             m_envelope.write(val);
@@ -178,6 +178,10 @@ void PulseChannel::writeReg(int idx, uint8_t val) {
             if ((val & NRX4_TRIGGER) != 0) trigger();
             break;
     }
+}
+
+void PulseChannel::writeLengthLoad(uint8_t val) {
+    m_lengthCounter = static_cast<uint8_t>(64 - (val & 0x3F));
 }
 
 void PulseChannel::powerOff() {
@@ -260,7 +264,7 @@ void WaveChannel::writeReg(int idx, uint8_t val) {
             break;
         case 1:
             m_nr31 = val;
-            m_lengthCounter = static_cast<uint16_t>(256 - val);
+            writeLengthLoad(val);
             break;
         case 2: m_nr32 = val; break;
         case 3: m_nr33 = val; break;
@@ -269,6 +273,10 @@ void WaveChannel::writeReg(int idx, uint8_t val) {
             if ((val & NRX4_TRIGGER) != 0) trigger();
             break;
     }
+}
+
+void WaveChannel::writeLengthLoad(uint8_t val) {
+    m_lengthCounter = static_cast<uint16_t>(256 - val);
 }
 
 uint8_t WaveChannel::readWaveRam(int idx) const {
@@ -360,7 +368,7 @@ void NoiseChannel::writeReg(int idx, uint8_t val) {
     switch (idx) {
         case 0:
             m_nr41 = val;
-            m_lengthCounter = static_cast<uint8_t>(64 - (val & 0x3F));
+            writeLengthLoad(val);
             break;
         case 1:
             m_envelope.write(val);
@@ -372,6 +380,10 @@ void NoiseChannel::writeReg(int idx, uint8_t val) {
             if ((val & NRX4_TRIGGER) != 0) trigger();
             break;
     }
+}
+
+void NoiseChannel::writeLengthLoad(uint8_t val) {
+    m_lengthCounter = static_cast<uint8_t>(64 - (val & 0x3F));
 }
 
 void NoiseChannel::powerOff() {

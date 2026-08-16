@@ -74,6 +74,10 @@ public:
     uint8_t readReg(int idx) const;
     void    writeReg(int idx, uint8_t val);
 
+    // Loads the length counter without touching any other register state. On
+    // DMG this stays reachable while the APU is powered off.
+    void writeLengthLoad(uint8_t val);
+
     // Current digital level, 0-15. Meaningless while the DAC is off.
     uint8_t output() const;
 
@@ -121,6 +125,10 @@ public:
     uint8_t readReg(int idx) const;
     void    writeReg(int idx, uint8_t val);
 
+    // See PulseChannel::writeLengthLoad. Channel 3's counter is 8-bit-loaded
+    // but counts to 256.
+    void writeLengthLoad(uint8_t val);
+
     uint8_t readWaveRam(int idx) const;
     void    writeWaveRam(int idx, uint8_t val);
 
@@ -163,6 +171,9 @@ public:
     // Register index 0-3, corresponding to NR41-NR44.
     uint8_t readReg(int idx) const;
     void    writeReg(int idx, uint8_t val);
+
+    // See PulseChannel::writeLengthLoad.
+    void writeLengthLoad(uint8_t val);
 
     uint8_t output() const;
 

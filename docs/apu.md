@@ -211,40 +211,47 @@ Complete for roadmap Phases 10 and 11 — all four channels. Verified three ways
   and CH4 for 12 (percussion) — the shape you would expect from the
   arrangement.
 
-## Blargg `dmg_sound`: 4 / 12
-
-Measured, so this section replaces guesswork about which parts are right.
+## Blargg `dmg_sound`: 7 / 12
 
 | Sub-test | Result |
 |---|---|
-| 01-registers | fail (02) |
+| **01-registers** | **ok** |
 | **02-len ctr** | **ok** |
 | 03-trigger | fail (03) |
 | **04-sweep** | **ok** |
 | **05-sweep details** | **ok** |
 | **06-overflow on trigger** | **ok** |
 | 07-len sweep period sync | fail (05) |
-| 08-len ctr during power | fail (01) |
+| **08-len ctr during power** | **ok** |
 | 09-wave read while on | fail (01) |
 | 10-wave trigger while on | fail (01) |
-| 11-regs after power | fail (04) |
+| **11-regs after power** | **ok** |
 | 12-wave write while on | fail (01) |
 
 **All three sweep tests pass**, including the discarded-second-calculation
 overflow check and the negate-bit rule — the two behaviours that looked most
 like bugs when writing them.
 
-The failures cluster into four areas:
+Two fixes took this from 4/12:
 
-- **Register read-back masks** (01, 11) — which bits read as ones, and what
-  survives a power cycle.
-- **Trigger edge cases** (03) — behaviour on retrigger that this
-  implementation smooths over.
-- **Length counter interactions** (07, 08), especially around the frame
-  sequencer's phase and APU power.
+- **`$FF27–$FF2F` must read `$FF`.** Those addresses are unused, but they still
+  belong to the APU. Leaving them out of the MMU's APU range let them fall
+  through to the flat I/O array and read back as `$00`. Fixed `01-registers`.
+- **Length counters stay writable while the APU is powered off.** On DMG they
+  survive a power cycle *and* remain reachable through the NRx1 load registers,
+  even though every other register is read-only in that state. That is what
+  `writeLengthLoad()` exists for. Fixed `11-regs after power` and `08-len ctr
+  during power`.
+
+The five remaining failures fall into two groups:
+
+- **Frame sequencer phase** (03, 07) — trigger behaviour and length/sweep
+  synchronisation both depend on *where* in the 8-step cycle an event lands,
+  which is where running the sequencer off its own counter rather than DIV
+  bit 4 shows up.
 - **Wave RAM while the channel is running** (09, 10, 12) — the read/write
-  redirect is implemented, but not the timing window it applies in, nor the
-  corruption a retrigger causes.
+  redirect is implemented, but not the narrow timing window it applies in, nor
+  the corruption a retrigger causes.
 
 ## Not implemented yet
 
