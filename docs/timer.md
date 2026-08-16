@@ -121,11 +121,15 @@ including `02-interrupts`, whose sub-test 4 sets `TAC=$05`, zeroes TIMA and IF,
 and asserts that the timer interrupt fires within a specific window — checking
 both that it does not fire too early and that it does fire in time.
 
+Blargg's **`instr_timing` passes**, which depends on a working TAC/TIMA/TMA
+chain as well as correct instruction cycle counts.
+
 ## Not implemented yet
 
-- **`instr_timing` and the Mooneye timer tests have not been run.** Neither ROM
-  is in `roms/`, so the edge cases above are implemented to spec but only
-  verified as far as `cpu_instrs` exercises them.
+- **The Mooneye timer tests have not been run.** They are the suite that
+  actually exercises the falling-edge quirks and the reload-delay window; those
+  are implemented to spec but only verified as far as `cpu_instrs` and
+  `instr_timing` reach.
 - **Sub-M-cycle write timing.** The distinction between writing TIMA during the
   overflow cycle versus the reload cycle collapses into one window at M-cycle
   granularity. Separating them needs the T-cycle-accurate memory access model

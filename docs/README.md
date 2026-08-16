@@ -29,21 +29,45 @@ If you are new to the codebase, follow the data flow:
 4. **[mmu.md](mmu.md)** — how the CPU reaches every other component.
 5. Everything else, as needed.
 
-## Current milestone
+## Test ROM results
 
-**All 11 Blargg `cpu_instrs` sub-tests pass.**
+Measured, not estimated. ROMs live in `roms/`, which is gitignored — see
+"Getting the test ROMs" below.
 
+| Suite | Result | Notes |
+|---|---|---|
+| Blargg `cpu_instrs` | **11 / 11** | Full instruction set |
+| Blargg `instr_timing` | **Pass** | Instruction cycle counts |
+| Blargg `halt_bug` | **Pass** | HALT with IME=0 and an interrupt pending |
+| `dmg-acid2` | **Pixel perfect** | 23040/23040 pixels match the reference |
+| Blargg `dmg_sound` | 4 / 12 | See [apu.md](apu.md) |
+| Blargg `oam_bug` | 2 / 8 | OAM corruption is not emulated at all |
+| Blargg `mem_timing` | 0 / 3 | Needs M-cycle memory access — Phase 12 |
+
+`dmg-acid2` matching exactly is the strongest single result here: it exercises
+sprite priority, the 10-sprite limit, X/Y flipping, the window line counter,
+BG-over-OBJ priority and palette application in one image.
+
+The three failing suites are all Phase 12 accuracy work, and none of them
+affects whether games run.
+
+### Getting the test ROMs
+
+Neither Mooneye nor Mealybug publishes releases, so the practical source for
+everything is the aggregated bundle:
+
+```bash
+curl -L -o gb-tests.zip \
+  https://github.com/c-sp/game-boy-test-roms/releases/download/v7.0/game-boy-test-roms-v7.0.zip
 ```
-./build/release/gameboy roms/cpu_instrs.gb --doctor 250000000 > /dev/null
-```
 
-```
-cpu_instrs
+Suites report results differently, which matters for automating them:
 
-01:ok  02:ok  03:ok  04:ok  05:ok  06:ok  07:ok  08:ok  09:ok  10:ok  11:ok
-
-Passed all tests
-```
+| Suite | Reports via |
+|---|---|
+| Blargg | Serial (`$FF01`/`$FF02`), and on screen |
+| Mooneye | `LD B,B` breakpoint, then registers hold 3, 5, 8, 13, 21, 34 |
+| Mealybug, acid2 | Framebuffer vs a reference PNG |
 
 All three graphics layers render — background, window and sprites, with OAM
 DMA — input works, and MBC1/2/3/5 are implemented. **Tetris is playable, and

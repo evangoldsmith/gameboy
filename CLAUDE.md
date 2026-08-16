@@ -65,7 +65,22 @@ Roadmap Phases 0–11 are done. **All 11 Blargg `cpu_instrs` sub-tests pass**, *
 - **Implemented**: full SM83 instruction set, interrupt dispatch, MMU routing with I/O dispatch, cartridge header parsing, MBC1/2/3/5, battery-backed saves, serial with correct clock-source handling, the full DIV/TIMA timer, background/window/sprite rendering, OAM DMA, all five interrupts, joypad input, all four sound channels with SDL audio output, Game Boy Doctor trace logging.
 - **Phase 12 (accuracy) is next**: M-cycle memory timing, variable mode 3 length, the STAT and OAM bugs.
 - **The MBC3 RTC stores and latches but does not tick**, and is not persisted to the `.sav`.
-- Only `cpu_instrs` is available in `roms/` — `dmg_sound`, `dmg-acid2`, `instr_timing` and Mooneye are not, so many edge cases are implemented to spec but unverified.
+
+### Test ROM results
+
+`roms/` is gitignored and stays that way — the repo is deliberately decoupled from ROM files. CI is expected to `curl` the [c-sp bundle](https://github.com/c-sp/game-boy-test-roms/releases) before running tests.
+
+| Suite | Result |
+|---|---|
+| `cpu_instrs` | 11 / 11 |
+| `instr_timing` | pass |
+| `halt_bug` | pass |
+| `dmg-acid2` | pixel perfect |
+| `dmg_sound` | 4 / 12 |
+| `oam_bug` | 2 / 8 |
+| `mem_timing` | 0 / 3 |
+
+Per-suite breakdowns live in `docs/README.md` and the relevant component docs. Mooneye and Mealybug have not been run — they need different harnesses (register signature and screenshot comparison respectively).
 - No tests exist beyond running test ROMs.
 
 Verify the CPU with:

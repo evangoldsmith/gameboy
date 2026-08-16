@@ -211,14 +211,46 @@ Complete for roadmap Phases 10 and 11 — all four channels. Verified three ways
   and CH4 for 12 (percussion) — the shape you would expect from the
   arrangement.
 
+## Blargg `dmg_sound`: 4 / 12
+
+Measured, so this section replaces guesswork about which parts are right.
+
+| Sub-test | Result |
+|---|---|
+| 01-registers | fail (02) |
+| **02-len ctr** | **ok** |
+| 03-trigger | fail (03) |
+| **04-sweep** | **ok** |
+| **05-sweep details** | **ok** |
+| **06-overflow on trigger** | **ok** |
+| 07-len sweep period sync | fail (05) |
+| 08-len ctr during power | fail (01) |
+| 09-wave read while on | fail (01) |
+| 10-wave trigger while on | fail (01) |
+| 11-regs after power | fail (04) |
+| 12-wave write while on | fail (01) |
+
+**All three sweep tests pass**, including the discarded-second-calculation
+overflow check and the negate-bit rule — the two behaviours that looked most
+like bugs when writing them.
+
+The failures cluster into four areas:
+
+- **Register read-back masks** (01, 11) — which bits read as ones, and what
+  survives a power cycle.
+- **Trigger edge cases** (03) — behaviour on retrigger that this
+  implementation smooths over.
+- **Length counter interactions** (07, 08), especially around the frame
+  sequencer's phase and APU power.
+- **Wave RAM while the channel is running** (09, 10, 12) — the read/write
+  redirect is implemented, but not the timing window it applies in, nor the
+  corruption a retrigger causes.
+
 ## Not implemented yet
 
 - **The frame sequencer runs on its own counter**, not off DIV bit 4 as the
-  hardware does. Writing to DIV can therefore not clock the sequencer, which is
-  observable in some test ROMs but inaudible in games.
-- **No `dmg_sound` test ROM** in `roms/`, so the sweep, envelope and wave-RAM
-  edge cases above are implemented to spec but unverified against the suite that
-  actually gates them.
+  hardware does. Writing to DIV therefore cannot clock the sequencer, which is
+  likely behind the length-counter failures above.
 - **The wave-RAM corruption quirk is not emulated** — on DMG, retriggering
   channel 3 while it is reading can corrupt the first four bytes.
 - **7-bit LFSR periodicity is not separately verified.** Both widths produce

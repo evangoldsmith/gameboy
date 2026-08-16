@@ -207,17 +207,23 @@ Scoped to `--doctor`. See [logger.md](logger.md).
 
 ## Current state
 
-Complete for roadmap Phases 6 and 7. Verified against Pokémon Red: the title
-screen renders correctly, and dumping OAM after 1500 frames shows 35 on-screen
-sprites with coherent positions and sequential tile indices, confirming both
-OAM DMA and sprite compositing.
+Complete for roadmap Phases 6 and 7.
+
+**`dmg-acid2` renders pixel-perfect** — all 23040 pixels match the reference
+image by shade index. That is the objective check for everything in this file:
+sprite priority, the 10-sprite limit, X/Y flipping, the window line counter,
+BG-over-OBJ priority, 8×16 sprites and palette application, all in one screen.
+
+Blargg's `oam_bug` scores 2/8, and the two it passes are `3-non_causes` and
+`6-timing_no_bug` — the sub-tests that check corruption *does not* happen. We
+pass those by never corrupting OAM at all, which is a coherent result rather
+than a lucky one.
 
 ## Not implemented yet
 
-- **`dmg-acid2` has not been run** — it is not in `roms/`, and it is the
-  objective check for everything in this file. Sprite priority, the window line
-  counter and the 10-sprite limit are implemented to spec but only verified
-  against real games so far.
+- **No OAM bug.** DMG corrupts OAM when a 16-bit access lands in `$FE00–$FEFF`
+  during mode 2. Blargg's `oam_bug` 1, 2, 4, 5, 7 and 8 all test that the
+  corruption happens, and all fail.
 - **No VRAM/OAM access restrictions.** Hardware blocks CPU access during modes 2
   and 3; here it is always allowed.
 - **Mode 3 length is fixed**, so mid-scanline raster effects will not render

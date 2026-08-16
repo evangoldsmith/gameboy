@@ -173,13 +173,21 @@ tested by Blargg's `halt_bug`.
 
 ## Current state
 
-All 245 valid base opcodes and all 256 CB opcodes are implemented. 10 of 11
-`cpu_instrs` sub-tests pass.
+All 245 valid base opcodes and all 256 CB opcodes are implemented.
+
+- Blargg `cpu_instrs`: **11 / 11**
+- Blargg `instr_timing`: **pass** — instruction cycle counts are correct,
+  including the taken/not-taken split on conditional branches
+- Blargg `halt_bug`: **pass** — the PC-fails-to-increment behaviour in
+  `fetch8()` is right
 
 ## Not implemented yet
 
 - **Cycle granularity is per-instruction, not per-M-cycle.** Memory accesses all
-  happen at once rather than being spread across the instruction's cycles. This
-  is invisible to `cpu_instrs` but matters for `mem_timing` (Phase 12).
+  happen at once rather than being spread across the instruction's cycles.
+  Invisible to `cpu_instrs` and `instr_timing`, but it is why **`mem_timing`
+  fails all three** of its sub-tests (`read_timing`, `write_timing`,
+  `modify_timing`). Fixing it means threading cycle counting through
+  `read8`/`write8` so peripherals advance mid-instruction — the single largest
+  piece of Phase 12.
 - **`STOP`** consumes its padding byte and otherwise does nothing.
-- `02-interrupts` fails pending the timer — see [timer.md](timer.md).
