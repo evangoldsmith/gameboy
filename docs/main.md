@@ -59,6 +59,23 @@ wrong.
 Each iteration polls events, calls `gb.runFrame()`, uploads the PPU framebuffer
 with `SDL_UpdateTexture`, then clears and presents.
 
+### Audio
+
+`openAudio()` opens a device matching the APU's format (48 kHz, signed 16-bit,
+stereo). If it fails the emulator still runs, just silently.
+
+Output uses **`SDL_QueueAudio` rather than an audio callback**. A callback runs
+on SDL's audio thread and would need a lock-free ring buffer between it and the
+emulation thread; queueing is thread-safe on its own, so the frontend can simply
+push whatever the APU produced after each `runFrame()`.
+
+The cost is that queue depth is the only backpressure. If emulation outruns
+playback the backlog becomes audible latency, so the frontend stops queueing
+once more than about an eighth of a second is buffered and drops those samples
+instead.
+
+### Saves
+
 `gb.flushSave()` runs every 120 frames and once more on exit, so a crash or a
 kill costs at most a couple of seconds rather than the whole run. It is a no-op
 unless the cartridge is battery-backed and RAM has actually changed — see
@@ -94,6 +111,7 @@ is the `SDL_UpdateTexture` call itself. Run `make run` to confirm.
 - **No frame pacing beyond vsync.** On a 120 Hz display the emulator runs about
   twice too fast, since nothing throttles to 59.7 Hz.
 - **Key bindings are compile-time constants**, and there is no gamepad support.
-- **No audio.** `SDL_INIT_VIDEO` only; no audio device is opened.
+- **Audio is frame-paced**, not streamed, and samples are dropped rather than
+  the emulator being slowed when the queue fills.
 - **No configuration** — scale, key bindings, and palette are all compile-time
   constants.

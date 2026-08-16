@@ -7,8 +7,8 @@ to the right component based on the address. Owns the memory regions that do not
 belong to any other component: WRAM, HRAM, the flat I/O array, and the IE
 register. **VRAM and OAM belong to the PPU** — the MMU only routes to them.
 
-The MMU holds references to `Cartridge`, `Serial`, `Timer`, `PPU`, and
-`Joypad`. It does not own them — `GameBoy` does.
+The MMU holds references to `Cartridge`, `Serial`, `Timer`, `PPU`, `Joypad`,
+and `APU`. It does not own them — `GameBoy` does.
 
 ## Public API
 
@@ -64,6 +64,7 @@ registers nothing responds to yet.
 | `$FF06` TMA | `Timer::tma()` | `Timer::writeTma()` |
 | `$FF07` TAC | `Timer::tac()` | `Timer::writeTac()` — can trigger a TIMA edge |
 | `$FF0F` IF | `m_io` with the top 3 bits forced to 1 | `m_io` |
+| `$FF10–$FF26`, `$FF30–$FF3F` | `APU::readReg()` | `APU::writeReg()` |
 | `$FF40–$FF4B` except `$FF46` | `PPU::readReg()` | `PPU::writeReg()` |
 | `$FF46` DMA | last source byte written | `oamDma()` — see below |
 
@@ -107,4 +108,5 @@ currently have a live component behind them.
   restrict the CPU to HRAM while it runs.
 - **No access restrictions.** VRAM and OAM are readable at all times; hardware
   blocks them during PPU modes 2 and 3.
-- **No APU registers** — `$FF10–$FF3F` are inert array slots.
+- **Sound channels 3 and 4 are not implemented**, so their registers are stored
+  by the APU but have no effect. See [apu.md](apu.md).

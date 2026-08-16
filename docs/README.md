@@ -10,7 +10,7 @@ works, and what is not implemented yet.
 | [mmu.md](mmu.md) | `src/memory/mmu.{h,cpp}` | Address routing + partial I/O dispatch |
 | [cartridge.md](cartridge.md) | `src/cartridge/cartridge.{h,cpp}` | Header parsing, MBC1/2/3/5, battery saves |
 | [ppu.md](ppu.md) | `src/ppu/ppu.{h,cpp}` | Background, window and sprite rendering |
-| [apu.md](apu.md) | `src/apu/apu.{h,cpp}` | **Stub** |
+| [apu.md](apu.md) | `src/apu/apu.{h,cpp}`, `channels.{h,cpp}` | Pulse channels 1–2; no wave or noise |
 | [timer.md](timer.md) | `src/timer.{h,cpp}` | DIV + TIMA with falling-edge clocking |
 | [joypad.md](joypad.md) | `src/joypad.{h,cpp}` | Full button matrix + interrupt |
 | [serial.md](serial.md) | `src/serial.{h,cpp}` | Output capture working |
@@ -49,9 +49,12 @@ All three graphics layers render — background, window and sprites, with OAM
 DMA — input works, and MBC1/2/3/5 are implemented. **Tetris is playable, and
 Pokémon Red reaches Prof. Oak's intro and the name entry screen.**
 
-Battery-backed cartridges persist to a `.sav` file next to the ROM.
+Battery-backed cartridges persist to a `.sav` file next to the ROM, and the two
+pulse sound channels play.
 
-Next up is Phase 10, the APU. The MBC3 real-time clock still does not tick.
+Next up is Phase 11 — sound channels 3 (wave) and 4 (noise), which is what makes
+music sound complete rather than thin. The MBC3 real-time clock still does not
+tick.
 
 `instr_timing`, `dmg-acid2`, and the Mooneye suite are not in `roms/`, so timer
 and PPU edge cases are implemented to spec but unverified beyond what

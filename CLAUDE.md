@@ -60,11 +60,10 @@ When a doc and the code disagree, the code is right and the doc is a bug.
 
 ## Project State
 
-Roadmap Phases 0–9 are done. **All 11 Blargg `cpu_instrs` sub-tests pass**, **Tetris is playable**, and **Pokémon Red reaches the name entry screen.**
+Roadmap Phases 0–10 are done. **All 11 Blargg `cpu_instrs` sub-tests pass**, **Tetris is playable with music**, and **Pokémon Red reaches the name entry screen.**
 
-- **Implemented**: full SM83 instruction set, interrupt dispatch, MMU routing with I/O dispatch, cartridge header parsing, MBC1/2/3/5, battery-backed saves, serial with correct clock-source handling, the full DIV/TIMA timer, background/window/sprite rendering, OAM DMA, all five interrupts, joypad input, Game Boy Doctor trace logging.
-- **Stub**: `apu.{h,cpp}` is an empty include guard.
-- **No audio.** Phase 10 (APU) is next.
+- **Implemented**: full SM83 instruction set, interrupt dispatch, MMU routing with I/O dispatch, cartridge header parsing, MBC1/2/3/5, battery-backed saves, serial with correct clock-source handling, the full DIV/TIMA timer, background/window/sprite rendering, OAM DMA, all five interrupts, joypad input, pulse sound channels 1–2 with SDL audio output, Game Boy Doctor trace logging.
+- **Sound channels 3 (wave) and 4 (noise) are missing.** Phase 11 is next.
 - **The MBC3 RTC stores and latches but does not tick**, and is not persisted to the `.sav`.
 - No tests exist beyond running test ROMs.
 

@@ -1,6 +1,7 @@
 #ifndef GAMEBOY_H
 #define GAMEBOY_H
 
+#include "apu/apu.h"
 #include "cartridge/cartridge.h"
 #include "cpu/cpu.h"
 #include "joypad.h"
@@ -38,6 +39,7 @@ public:
     Serial&    serial()    { return m_serial; }
     PPU&       ppu()       { return m_ppu; }
     Joypad&    joypad()    { return m_joypad; }
+    APU&       apu()       { return m_apu; }
 
 private:
     void requestInterrupt(Interrupt which);
@@ -49,6 +51,7 @@ private:
     Timer     m_timer;
     PPU       m_ppu;
     Joypad    m_joypad;
+    APU       m_apu;
     MMU       m_mmu;
     CPU       m_cpu;
 };

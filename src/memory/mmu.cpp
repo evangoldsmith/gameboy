@@ -13,6 +13,12 @@ constexpr uint16_t REG_IF   = 0xFF0F;  // Interrupt flags
 
 constexpr uint16_t REG_DMA = 0xFF46;  // OAM DMA source
 
+// $FF10-$FF26 are the sound registers, $FF30-$FF3F is wave RAM. The gap between
+// them is unused.
+constexpr bool isApuReg(uint16_t addr) {
+    return (addr >= 0xFF10 && addr <= 0xFF26) || (addr >= 0xFF30 && addr <= 0xFF3F);
+}
+
 // $FF40–$FF45 and $FF47–$FF4B belong to the PPU. $FF46 sits in the middle of
 // that range but stays here: it copies from anywhere in the address space, so
 // only the MMU can service it.
@@ -21,8 +27,10 @@ constexpr bool isPpuReg(uint16_t addr) {
 }
 }  // namespace
 
-MMU::MMU(Cartridge& cart, Serial& serial, Timer& timer, PPU& ppu, Joypad& joypad)
-    : m_cart(cart), m_serial(serial), m_timer(timer), m_ppu(ppu), m_joypad(joypad) {}
+MMU::MMU(Cartridge& cart, Serial& serial, Timer& timer, PPU& ppu, Joypad& joypad,
+         APU& apu)
+    : m_cart(cart), m_serial(serial), m_timer(timer), m_ppu(ppu), m_joypad(joypad),
+      m_apu(apu) {}
 
 uint8_t MMU::read(uint16_t addr) {
     // $0000–$7FFF: Cartridge ROM
@@ -138,6 +146,7 @@ uint8_t MMU::readIO(uint16_t addr) {
         case REG_IF:   return static_cast<uint8_t>(m_io[REG_IF - 0xFF00] | 0xE0);
         default:
             if (isPpuReg(addr)) return m_ppu.readReg(addr);
+            if (isApuReg(addr)) return m_apu.readReg(addr);
             return m_io[addr - 0xFF00];
     }
 }
@@ -166,8 +175,9 @@ void MMU::writeIO(uint16_t addr, uint8_t val) {
             oamDma(val);
             break;
         default:
-            if (isPpuReg(addr)) m_ppu.writeReg(addr, val);
-            else                m_io[addr - 0xFF00] = val;
+            if (isPpuReg(addr))      m_ppu.writeReg(addr, val);
+            else if (isApuReg(addr)) m_apu.writeReg(addr, val);
+            else                     m_io[addr - 0xFF00] = val;
             break;
     }
 }

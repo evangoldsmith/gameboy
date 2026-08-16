@@ -22,6 +22,7 @@ MMU&       mmu();
 Serial&    serial();
 PPU&       ppu();
 Joypad&    joypad();
+APU&       apu();
 
 static constexpr uint32_t TCYCLES_PER_FRAME = 70224;   // 154 lines x 456 dots
 ```
@@ -37,7 +38,8 @@ Serial     m_serial
 Timer      m_timer
 PPU        m_ppu
 Joypad     m_joypad
-MMU        m_mmu       // needs cart, serial, timer, ppu, joypad
+APU        m_apu
+MMU        m_mmu       // needs cart, serial, timer, ppu, joypad, apu
 CPU        m_cpu       // needs mmu
 ```
 
@@ -99,7 +101,7 @@ Wiring is complete for the components that exist.
 
 ## Not implemented yet
 
-- **No APU member** — that component is still a stub.
+- **Sound channels 3 and 4** are missing from the APU — see [apu.md](apu.md).
 - **No frame-time pacing in the core.** `runFrame()` runs as fast as the host
   allows; the frontend leans on SDL vsync instead. Real pacing is Phase 14.
 - **No save states.** Phase 14.

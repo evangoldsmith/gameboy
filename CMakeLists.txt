@@ -44,6 +44,7 @@ add_library(gameboy_core STATIC
     src/memory/mmu.cpp
     src/ppu/ppu.cpp
     src/apu/apu.cpp
+    src/apu/channels.cpp
     src/timer.cpp
     src/joypad.cpp
     src/serial.cpp

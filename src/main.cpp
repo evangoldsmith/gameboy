@@ -54,8 +54,28 @@ int runDoctor(GameBoy& gb, long maxSteps) {
     return EXIT_SUCCESS;
 }
 
+// Opens an audio device matching the APU's output format. Returns 0 on
+// failure, in which case the emulator still runs, just silently.
+SDL_AudioDeviceID openAudio() {
+    SDL_AudioSpec want{};
+    want.freq     = APU::SAMPLE_RATE;
+    want.format   = AUDIO_S16SYS;
+    want.channels = APU::CHANNELS;
+    want.samples  = 1024;   // buffer size, a compromise between latency and dropouts
+    want.callback = nullptr;  // using SDL_QueueAudio instead of a callback
+
+    SDL_AudioSpec have{};
+    const SDL_AudioDeviceID dev = SDL_OpenAudioDevice(nullptr, 0, &want, &have, 0);
+    if (dev == 0) {
+        std::cerr << "Audio unavailable (" << SDL_GetError() << "), running silently\n";
+        return 0;
+    }
+    SDL_PauseAudioDevice(dev, 0);
+    return dev;
+}
+
 int runSDL(GameBoy& gb, const CartridgeHeader& hdr) {
-    if (SDL_Init(SDL_INIT_VIDEO) != 0) {
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) != 0) {
         std::cerr << "SDL_Init error: " << SDL_GetError() << "\n";
         return EXIT_FAILURE;
     }
@@ -103,6 +123,13 @@ int runSDL(GameBoy& gb, const CartridgeHeader& hdr) {
     SDL_RenderSetLogicalSize(renderer, GB_WIDTH, GB_HEIGHT);
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
 
+    const SDL_AudioDeviceID audio = openAudio();
+
+    // Drop samples rather than let the queue grow without bound: if emulation
+    // outruns playback the backlog becomes audible latency.
+    const uint32_t maxQueuedBytes =
+        static_cast<uint32_t>(APU::SAMPLE_RATE * APU::CHANNELS * sizeof(int16_t) / 8);
+
     bool running = true;
     SDL_Event event;
 
@@ -127,6 +154,14 @@ int runSDL(GameBoy& gb, const CartridgeHeader& hdr) {
 
         gb.runFrame();
 
+        const auto& audioSamples = gb.apu().samples();
+        if (audio != 0 && !audioSamples.empty() &&
+            SDL_GetQueuedAudioSize(audio) < maxQueuedBytes) {
+            SDL_QueueAudio(audio, audioSamples.data(),
+                           static_cast<uint32_t>(audioSamples.size() * sizeof(int16_t)));
+        }
+        gb.apu().clearSamples();
+
         if (++framesSinceSave >= AUTOSAVE_FRAMES) {
             gb.flushSave();
             framesSinceSave = 0;
@@ -144,6 +179,7 @@ int runSDL(GameBoy& gb, const CartridgeHeader& hdr) {
 
     gb.flushSave();
 
+    if (audio != 0) SDL_CloseAudioDevice(audio);
     SDL_DestroyTexture(texture);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);

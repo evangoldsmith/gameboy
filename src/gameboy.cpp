@@ -2,7 +2,7 @@
 
 GameBoy::GameBoy(const std::string& romPath)
     : m_cart(Cartridge::load(romPath)),
-      m_mmu(m_cart, m_serial, m_timer, m_ppu, m_joypad),
+      m_mmu(m_cart, m_serial, m_timer, m_ppu, m_joypad, m_apu),
       m_cpu(m_mmu) {}
 
 void GameBoy::requestInterrupt(Interrupt which) {
@@ -15,6 +15,7 @@ uint8_t GameBoy::step() {
 
     m_timer.tick(tcycles);
     m_ppu.tick(tcycles);
+    m_apu.tick(tcycles);
 
     if (m_ppu.takeVBlankIrq()) requestInterrupt(Interrupt::VBlank);
     if (m_ppu.takeStatIrq())   requestInterrupt(Interrupt::LCDStat);

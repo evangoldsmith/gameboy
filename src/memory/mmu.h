@@ -1,6 +1,7 @@
 #ifndef MMU_H
 #define MMU_H
 
+#include "../apu/apu.h"
 #include "../cartridge/cartridge.h"
 #include "../joypad.h"
 #include "../ppu/ppu.h"
@@ -12,7 +13,8 @@
 
 class MMU {
 public:
-    MMU(Cartridge& cart, Serial& serial, Timer& timer, PPU& ppu, Joypad& joypad);
+    MMU(Cartridge& cart, Serial& serial, Timer& timer, PPU& ppu, Joypad& joypad,
+        APU& apu);
 
     // Not const: reads of I/O registers can observe live subsystem state and
     // will eventually mutate it (the DIV/TIMA edge cases in Phase 4).
@@ -29,6 +31,7 @@ private:
     Timer&     m_timer;
     PPU&       m_ppu;
     Joypad&    m_joypad;
+    APU&       m_apu;
 
     // VRAM and OAM belong to the PPU; the MMU only routes to them.
     std::array<uint8_t, 0x2000> m_wram{};  // $C000–$DFFF  8 KB
