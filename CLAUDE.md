@@ -60,11 +60,12 @@ When a doc and the code disagree, the code is right and the doc is a bug.
 
 ## Project State
 
-Roadmap Phases 0–10 are done. **All 11 Blargg `cpu_instrs` sub-tests pass**, **Tetris is playable with music**, and **Pokémon Red reaches the name entry screen.**
+Roadmap Phases 0–11 are done. **All 11 Blargg `cpu_instrs` sub-tests pass**, **Tetris is playable with full audio**, and **Pokémon Red reaches the name entry screen.**
 
-- **Implemented**: full SM83 instruction set, interrupt dispatch, MMU routing with I/O dispatch, cartridge header parsing, MBC1/2/3/5, battery-backed saves, serial with correct clock-source handling, the full DIV/TIMA timer, background/window/sprite rendering, OAM DMA, all five interrupts, joypad input, pulse sound channels 1–2 with SDL audio output, Game Boy Doctor trace logging.
-- **Sound channels 3 (wave) and 4 (noise) are missing.** Phase 11 is next.
+- **Implemented**: full SM83 instruction set, interrupt dispatch, MMU routing with I/O dispatch, cartridge header parsing, MBC1/2/3/5, battery-backed saves, serial with correct clock-source handling, the full DIV/TIMA timer, background/window/sprite rendering, OAM DMA, all five interrupts, joypad input, all four sound channels with SDL audio output, Game Boy Doctor trace logging.
+- **Phase 12 (accuracy) is next**: M-cycle memory timing, variable mode 3 length, the STAT and OAM bugs.
 - **The MBC3 RTC stores and latches but does not tick**, and is not persisted to the `.sav`.
+- Only `cpu_instrs` is available in `roms/` — `dmg_sound`, `dmg-acid2`, `instr_timing` and Mooneye are not, so many edge cases are implemented to spec but unverified.
 - No tests exist beyond running test ROMs.
 
 Verify the CPU with:

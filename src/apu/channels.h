@@ -1,6 +1,7 @@
 #ifndef CHANNELS_H
 #define CHANNELS_H
 
+#include <array>
 #include <cstdint>
 
 // Sound channel primitives, deliberately kept free of any Game Boy register
@@ -34,6 +35,30 @@ private:
     int      m_step{};
 };
 
+// The NRx2 volume envelope, shared by the two pulse channels and the noise
+// channel. Owns the register byte so reads return exactly what was written —
+// the envelope's running volume never writes back into it.
+class VolumeEnvelope {
+public:
+    void    write(uint8_t nrx2) { m_reg = nrx2; }
+    uint8_t reg() const { return m_reg; }
+
+    // The DAC is powered by the upper five bits; all zero means no output at
+    // all, regardless of the running volume.
+    bool dacEnabled() const { return (m_reg & 0xF8) != 0; }
+
+    void trigger();
+    void tick();
+
+    uint8_t volume() const { return m_volume; }
+    void    reset() { m_reg = 0; m_volume = 0; m_timer = 0; }
+
+private:
+    uint8_t m_reg{};
+    uint8_t m_volume{};
+    uint8_t m_timer{};
+};
+
 // Square wave with a duty cycle, length counter and volume envelope. Channel 1
 // additionally has a frequency sweep; channel 2 is the same unit without it.
 class PulseChannel {
@@ -42,7 +67,7 @@ public:
 
     void tick(uint8_t tcycles);
     void tickLength();
-    void tickEnvelope();
+    void tickEnvelope() { m_envelope.tick(); }
     void tickSweep();
 
     // Register index 0-4, corresponding to NRx0-NRx4.
@@ -53,7 +78,7 @@ public:
     uint8_t output() const;
 
     bool enabled() const { return m_enabled; }
-    bool dacEnabled() const { return (m_nrx2 & 0xF8) != 0; }
+    bool dacEnabled() const { return m_envelope.dacEnabled(); }
 
     void powerOff();
 
@@ -68,23 +93,98 @@ private:
 
     uint8_t m_nrx0{};  // sweep    (channel 1 only)
     uint8_t m_nrx1{};  // duty + length load
-    uint8_t m_nrx2{};  // envelope
     uint8_t m_nrx3{};  // frequency low
     uint8_t m_nrx4{};  // frequency high + trigger + length enable
 
-    bool     m_enabled{};
-    int32_t  m_periodTimer{};  // T-cycles until the next duty step
-    uint8_t  m_dutyStep{};
+    VolumeEnvelope m_envelope;
+
+    bool    m_enabled{};
+    int32_t m_periodTimer{};  // T-cycles until the next duty step
+    uint8_t m_dutyStep{};
 
     uint8_t m_lengthCounter{};
-
-    uint8_t m_volume{};
-    uint8_t m_envelopeTimer{};
 
     uint16_t m_sweepShadow{};
     uint8_t  m_sweepTimer{};
     bool     m_sweepEnabled{};
     bool     m_sweepNegated{};  // a subtract has happened since the last trigger
+};
+
+// Plays 32 four-bit samples from its own wave RAM. No envelope — the volume is
+// a coarse shift instead.
+class WaveChannel {
+public:
+    void tick(uint8_t tcycles);
+    void tickLength();
+
+    // Register index 0-4, corresponding to NR30-NR34.
+    uint8_t readReg(int idx) const;
+    void    writeReg(int idx, uint8_t val);
+
+    uint8_t readWaveRam(int idx) const;
+    void    writeWaveRam(int idx, uint8_t val);
+
+    uint8_t output() const;
+
+    bool enabled() const { return m_enabled; }
+    bool dacEnabled() const { return (m_nr30 & 0x80) != 0; }
+
+    void powerOff();
+
+private:
+    void     trigger();
+    uint16_t frequency() const;
+    void     reloadPeriod();
+    void     loadSample();
+
+    uint8_t m_nr30{};  // DAC enable
+    uint8_t m_nr31{};  // length load
+    uint8_t m_nr32{};  // output level
+    uint8_t m_nr33{};  // frequency low
+    uint8_t m_nr34{};  // frequency high + trigger + length enable
+
+    std::array<uint8_t, 16> m_ram{};
+
+    bool     m_enabled{};
+    int32_t  m_periodTimer{};
+    uint8_t  m_position{};       // 0-31, which nibble is playing
+    uint8_t  m_sample{};         // the nibble currently held
+    uint16_t m_lengthCounter{};  // up to 256, so wider than the others
+};
+
+// Pseudo-random noise from a linear feedback shift register, with the same
+// length counter and volume envelope as the pulse channels.
+class NoiseChannel {
+public:
+    void tick(uint8_t tcycles);
+    void tickLength();
+    void tickEnvelope() { m_envelope.tick(); }
+
+    // Register index 0-3, corresponding to NR41-NR44.
+    uint8_t readReg(int idx) const;
+    void    writeReg(int idx, uint8_t val);
+
+    uint8_t output() const;
+
+    bool enabled() const { return m_enabled; }
+    bool dacEnabled() const { return m_envelope.dacEnabled(); }
+
+    void powerOff();
+
+private:
+    void    trigger();
+    int32_t period() const;
+
+    uint8_t m_nr41{};  // length load
+    uint8_t m_nr43{};  // clock shift + width + divisor
+    uint8_t m_nr44{};  // trigger + length enable
+
+    VolumeEnvelope m_envelope;
+
+    bool     m_enabled{};
+    int32_t  m_periodTimer{};
+    uint16_t m_lfsr{0x7FFF};
+    uint8_t  m_lengthCounter{};
 };
 
 #endif // CHANNELS_H

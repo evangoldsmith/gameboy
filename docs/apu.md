@@ -2,12 +2,9 @@
 
 **Source:** `src/apu/apu.h`, `src/apu/apu.cpp`, `src/apu/channels.h`, `src/apu/channels.cpp`
 
-Owns the sound registers (`$FF10–$FF3F`), drives the channels from the frame
-sequencer, and resamples their combined output down to a normal audio rate. Has
-no SDL dependency — the frontend drains `samples()` once a frame.
-
-**Channels 1 and 2 (pulse) are implemented. Channels 3 (wave) and 4 (noise) are
-not** — that is roadmap Phase 11.
+Owns the sound registers (`$FF10–$FF3F`), drives all four channels from the
+frame sequencer, and resamples their combined output down to a normal audio
+rate. Has no SDL dependency — the frontend drains `samples()` once a frame.
 
 ## Structure
 
@@ -15,10 +12,18 @@ The channel logic lives in `channels.h`/`channels.cpp` as standalone types that
 know nothing about the Game Boy address space; `APU` is a thin register-decode
 layer over them.
 
+| Type | Role |
+|---|---|
+| `FrameSequencer` | 512 Hz clock driving length, sweep and envelope |
+| `VolumeEnvelope` | NRx2 envelope, shared by channels 1, 2 and 4 |
+| `PulseChannel` | Channels 1 and 2; sweep is constructor-selected |
+| `WaveChannel` | Channel 3 |
+| `NoiseChannel` | Channel 4 |
+
 That split is deliberate. The GBA's four legacy PSG channels are this same
-hardware at different addresses, so keeping `PulseChannel` and `FrameSequencer`
-free of address decoding is what makes them reusable if a GBA core ever happens
-— see the appendix in `roadmap.md`.
+hardware at different addresses, so keeping these free of address decoding is
+what makes them reusable if a GBA core ever happens — see the appendix in
+`roadmap.md`.
 
 ## Public API
 
@@ -41,16 +46,17 @@ void clearSamples();
 |---|---|---|
 | `$FF10–$FF14` | NR10–NR14 | Channel 1: sweep, duty/length, envelope, frequency |
 | `$FF16–$FF19` | NR21–NR24 | Channel 2: same without sweep |
-| `$FF1A–$FF1E` | NR30–NR34 | Channel 3 — **not implemented** |
-| `$FF20–$FF23` | NR41–NR44 | Channel 4 — **not implemented** |
+| `$FF1A–$FF1E` | NR30–NR34 | Channel 3: DAC, length, output level, frequency |
+| `$FF20–$FF23` | NR41–NR44 | Channel 4: length, envelope, LFSR clock |
+| `$FF30–$FF3F` | Wave RAM | 32 four-bit samples, upper nibble first |
 | `$FF24` | NR50 | Master volume per side, 0–7, scaling as `(n+1)/8` |
 | `$FF25` | NR51 | Panning: bits 0–3 route channels 1–4 right, 4–7 left |
 | `$FF26` | NR52 | Bit 7 powers the APU; bits 0–3 are read-only channel status |
 
 Powering the APU off through NR52 clears every register and makes them
-read-only until it is switched back on. Wave RAM (`$FF30–$FF3F`) stays
-accessible either way, and is stored so writes are not lost even though nothing
-plays it yet.
+read-only until it is switched back on. **Wave RAM survives** a power cycle and
+stays accessible either way — `WaveChannel::powerOff()` deliberately leaves the
+sample data alone.
 
 ## The frame sequencer
 
@@ -96,15 +102,86 @@ non-obvious behaviours are implemented because Blargg's sound tests check them:
 channel; turning it back on does *not* restart it — that needs a trigger. A
 disabled DAC contributes silence rather than the level the channel last held.
 
+## WaveChannel
+
+Plays 32 four-bit samples from its own wave RAM, upper nibble of each byte
+first. No envelope — volume is a coarse right shift from NR32: mute, 100%, 50%,
+25% (shifts of 4, 0, 1, 2).
+
+Its period timer is `(2048 - N) * 2` T-cycles, **half** the pulse channels'
+`* 4`. With 32 samples per cycle rather than 8 duty steps, a full waveform
+repeats at `65536 / (2048 - N)` Hz — exactly half a pulse channel's rate for the
+same `N`, which is a convenient sanity check.
+
+Its DAC is NR30 bit 7, not an envelope, so `dacEnabled()` reads differently from
+the other channels.
+
+Two quirks:
+
+- **The first sample played after a trigger is index 1, not 0.** Trigger resets
+  the position to 0, and the first timer expiry advances *before* reading.
+- **Reading wave RAM while the channel is running** returns whichever byte the
+  wave pointer currently sits on, not the byte addressed. Writes behave the same
+  way. This is DMG behaviour; CGB differs.
+
+## NoiseChannel
+
+A 15-bit linear feedback shift register clocked at `divisor << shift`, where the
+divisor comes from a table (`8, 16, 32, 48, 64, 80, 96, 112`) rather than a
+formula — code 0 is a half-step, not zero.
+
+Each clock XORs the bottom two bits and feeds the result back into bit 14:
+
+```cpp
+bit = (lfsr & 1) ^ ((lfsr >> 1) & 1);
+lfsr = (lfsr >> 1) | (bit << 14);
+if (width7) lfsr = (lfsr & ~(1 << 6)) | (bit << 6);
+```
+
+The width bit also feeds bit 6, shortening the repeat from 32767 steps to 127 —
+short enough to hear as a pitch, which is the metallic tone games use for
+certain effects.
+
+Output is **bit 0 inverted**, so a register full of ones idles quiet. The LFSR
+resets to all ones on trigger.
+
+Length and envelope behave exactly as on the pulse channels, via the shared
+`VolumeEnvelope`.
+
 ## Mixing and resampling
 
 Each channel's digital 0–15 level maps to an analogue swing of `level/7.5 - 1`.
 Channels are routed per side by NR51, scaled by NR50, and written as interleaved
 signed 16-bit stereo.
 
-`MIX_SCALE` is `32767/4` — headroom for four channels at full scale, so adding
-channels 3 and 4 will not clip. With both pulse channels at full volume the
-observed peak is 16383, exactly half of full scale, as expected.
+### Headroom
+
+`MIX_SCALE` is `32767/5.5`, not `32767/4`. Four channels each swing ±1, so a
+scale of `/4` fills the range *exactly* and leaves nothing for the high-pass
+filter's ripple — measured that way, roughly 6% of samples clipped, and
+steadily rather than as a startup transient. The extra divisor costs about
+2.5 dB and brings the worst case to a peak of 26432 with zero clipped samples.
+
+`toSample()` clamps rather than relying on the cast: converting an out-of-range
+float to `int16_t` is undefined behaviour, so the clamp is a correctness
+requirement, not just a quality one.
+
+### High-pass filter
+
+A one-pole filter per side removes the DC offset a channel contributes while its
+DAC is enabled but it is not playing:
+
+```cpp
+out = in - capacitor;
+capacitor = in - out * HPF_CHARGE;
+```
+
+Hardware bleeds this away through an RC network decaying by ~0.999958 per
+T-cycle; raised to the number of cycles between output samples that becomes the
+0.996337 used here. Without it, enabling a DAC introduces a constant bias that
+clicks audibly on every trigger.
+
+### Resampling
 
 Resampling from the 4.19 MHz master clock uses a fixed-point accumulator:
 
@@ -121,25 +198,30 @@ frontend's audio queue does not starve.
 
 ## Current state
 
-Complete for roadmap Phase 10. Verified two ways:
+Complete for roadmap Phases 10 and 11 — all four channels. Verified three ways:
 
-- **Synthetic tone.** Programming channel 1 with period 1750 and measuring zero
-  crossings gives 440.0 Hz against a predicted 439.8 Hz, with exactly 48000
-  frames per emulated second and a peak of 8191.
-- **Real game.** Tetris's title music captured to a 48 kHz stereo WAV shows
-  varying per-second RMS (6400–10100) and a peak of 16383, i.e. both pulse
-  channels active and modulating.
+- **Synthetic tones**, measured by zero crossings over one emulated second:
+  channel 1 at period 1750 gives 440.0 Hz against a predicted 439.8; channel 3
+  with the same period gives 220.0 Hz against 219.9, confirming its half-rate
+  timer. Channel 4 produces broadband output at ~24000 crossings per second.
+- **Clipping.** All four channels driven simultaneously at maximum volume peak
+  at 26432 with zero clipped samples.
+- **Real game.** Over 300 frames of Tetris's title music, channel status in NR52
+  shows CH1 and CH2 active for 201 frames each, CH3 for all 300 (the bass line)
+  and CH4 for 12 (percussion) — the shape you would expect from the
+  arrangement.
 
 ## Not implemented yet
 
-- **Channel 3 (wave)** — Wave RAM is stored but never played. Phase 11.
-- **Channel 4 (noise)** — the 15-bit LFSR. Phase 11.
 - **The frame sequencer runs on its own counter**, not off DIV bit 4 as the
   hardware does. Writing to DIV can therefore not clock the sequencer, which is
-  observable in some test ROMs.
-- **No high-pass filter.** Hardware removes the DC offset from
-  inactive-but-DAC-enabled channels.
-- **No `dmg_sound` test ROM** in `roms/`, so the sweep and envelope edge cases
-  above are implemented to spec but unverified.
+  observable in some test ROMs but inaudible in games.
+- **No `dmg_sound` test ROM** in `roms/`, so the sweep, envelope and wave-RAM
+  edge cases above are implemented to spec but unverified against the suite that
+  actually gates them.
+- **The wave-RAM corruption quirk is not emulated** — on DMG, retriggering
+  channel 3 while it is reading can corrupt the first four bytes.
+- **7-bit LFSR periodicity is not separately verified.** Both widths produce
+  noise, but the shortened repeat was not measured.
 - **Frame-paced output.** Samples are queued once per frame rather than
   streamed, and the frontend drops samples if emulation outruns playback.
