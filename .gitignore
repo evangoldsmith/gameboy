@@ -1,4 +1,4 @@
 build/
 .claude/
 roms/*
-roadmap.md
+roadmap.md.DS_Store
