@@ -45,15 +45,24 @@ The trace is discarded, and only the test results reach the terminal.
 ## `runSDL()`
 
 Standard SDL setup: window at `160×144 × SCALE`, accelerated renderer, and a
-streaming `ARGB8888` texture at native resolution.
+streaming `ARGB8888` texture at native resolution. `GB_WIDTH`/`GB_HEIGHT` come
+from `PPU::WIDTH`/`PPU::HEIGHT` rather than being duplicated here.
+
+The renderer requests `SDL_RENDERER_PRESENTVSYNC`, which paces the loop at the
+display's refresh rate. Close enough to the DMG's 59.7 Hz for now, and it stops
+the loop spinning at whatever speed the host manages.
 
 `SDL_RenderSetLogicalSize` handles scaling, and `SDL_HINT_RENDER_SCALE_QUALITY`
 is `"0"` for nearest-neighbour — bilinear filtering on a 160×144 source looks
 wrong.
 
 Each iteration polls events (quit on window close or Escape), calls
-`gb.runFrame()`, then clears to DMG green and presents. Cleanup tears down the
-texture, renderer, and window in reverse order of creation.
+`gb.runFrame()`, uploads the PPU framebuffer with `SDL_UpdateTexture`, then
+clears and presents. Cleanup tears down the texture, renderer, and window in
+reverse order of creation.
+
+The framebuffer is `std::array<uint32_t, 160*144>` in ARGB8888, which matches
+the texture format exactly — the upload is a straight memcpy with no conversion.
 
 ## Error handling
 
@@ -63,19 +72,18 @@ reports to stderr and returns `EXIT_FAILURE`.
 
 ## Current state
 
-Both modes work. `--doctor` is the verified path — it was used to run the full
-`cpu_instrs` suite.
+Both modes work. `--doctor` is the thoroughly verified path.
 
-**The SDL path is built and wired but has not been exercised interactively.** It
-will show a blank green window, since nothing renders until Phase 6.
+**The SDL path is built and wired but still has not been exercised
+interactively.** Rendering was verified headlessly instead, by linking
+`gameboy_core` into a harness that runs frames and dumps the framebuffer to a
+BMP — the `cpu_instrs` results screen renders correctly. The only untested delta
+is the `SDL_UpdateTexture` call itself. Run `make run` to confirm.
 
 ## Not implemented yet
 
-- **No framebuffer upload.** The `SDL_UpdateTexture` call is commented out
-  pending a PPU framebuffer; the texture is created but never written, so
-  `SDL_RenderCopy` draws undefined contents over the green clear.
-- **No frame pacing.** The loop runs as fast as the host allows instead of
-  throttling to 59.7 Hz. There is no vsync flag on the renderer.
+- **No frame pacing beyond vsync.** On a 120 Hz display the emulator runs about
+  twice too fast, since nothing throttles to 59.7 Hz.
 - **No input handling** beyond quit — see [joypad.md](joypad.md).
 - **No audio.** `SDL_INIT_VIDEO` only; no audio device is opened.
 - **No configuration** — scale, key bindings, and palette are all compile-time

@@ -74,6 +74,7 @@ Peripherals do not request interrupts themselves. Each exposes a read-and-clear
 
 ```cpp
 if (m_ppu.takeVBlankIrq()) requestInterrupt(Interrupt::VBlank);
+if (m_ppu.takeStatIrq())   requestInterrupt(Interrupt::LCDStat);
 if (m_timer.takeIrq())     requestInterrupt(Interrupt::Timer);
 if (m_serial.takeIrq())    requestInterrupt(Interrupt::Serial);
 ```
@@ -95,9 +96,7 @@ Wiring is complete for the components that exist.
 ## Not implemented yet
 
 - **No APU or Joypad members** — those components are still stubs.
-- **No framebuffer accessor.** Phase 6 adds a `std::span<const uint32_t>` for
-  the frontend to upload.
-- **No frame-time pacing.** `runFrame()` runs as fast as the host allows; the
-  frontend does not throttle to 59.7 Hz.
+- **No frame-time pacing in the core.** `runFrame()` runs as fast as the host
+  allows; the frontend leans on SDL vsync instead. Real pacing is Phase 14.
 - **No save states.** Phase 14.
 - **Cycle remainder is dropped** between frames rather than carried.

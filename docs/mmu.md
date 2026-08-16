@@ -4,8 +4,8 @@
 
 The central address router. Every CPU memory access lands here and is dispatched
 to the right component based on the address. Owns the memory regions that do not
-belong to any other component: VRAM, WRAM, OAM, HRAM, the flat I/O array, and
-the IE register.
+belong to any other component: WRAM, HRAM, the flat I/O array, and the IE
+register. **VRAM and OAM belong to the PPU** — the MMU only routes to them.
 
 The MMU holds references to `Cartridge`, `Serial`, `Timer`, and `PPU`. It does
 not own them — `GameBoy` does.
@@ -31,11 +31,11 @@ start.
 | Range | Destination | Notes |
 |---|---|---|
 | `$0000–$7FFF` | `Cartridge::read/write` | ROM; writes go to MBC registers |
-| `$8000–$9FFF` | `m_vram` | 8 KB |
+| `$8000–$9FFF` | `PPU::readVram/writeVram` | 8 KB, owned by the PPU |
 | `$A000–$BFFF` | `Cartridge::read/write` | External RAM, if present |
 | `$C000–$DFFF` | `m_wram` | 8 KB |
 | `$E000–$FDFF` | `m_wram` | Echo RAM, mirrors `$C000–$DDFF` |
-| `$FE00–$FE9F` | `m_oam` | 160 B, 40 sprite entries |
+| `$FE00–$FE9F` | `PPU::readOam/writeOam` | 160 B, 40 sprite entries, owned by the PPU |
 | `$FEA0–$FEFF` | — | Unusable; reads `$FF`, writes ignored |
 | `$FF00–$FF7F` | `readIO`/`writeIO` | 128 B |
 | `$FF80–$FFFE` | `m_hram` | 127 B |
@@ -63,8 +63,10 @@ registers nothing responds to yet.
 | `$FF06` TMA | `Timer::tma()` | `Timer::writeTma()` |
 | `$FF07` TAC | `Timer::tac()` | `Timer::writeTac()` — can trigger a TIMA edge |
 | `$FF0F` IF | `m_io` with the top 3 bits forced to 1 | `m_io` |
-| `$FF41` STAT | `PPU::stat()` | `m_io` |
-| `$FF44` LY | `PPU::ly()` | ignored (read-only) |
+| `$FF40–$FF45`, `$FF47` | `PPU::readReg()` | `PPU::writeReg()` |
+
+The PPU register range is matched by an `isPpuReg()` helper in the `default`
+branch rather than one case per address, since the PPU decodes them itself.
 
 IF reads back with bits 5–7 set because those bits do not exist in hardware and
 always read as 1. Some test ROMs check this.
@@ -84,4 +86,4 @@ currently have a live component behind them.
 - **No access restrictions.** VRAM and OAM are readable at all times; hardware
   blocks them during PPU modes 2 and 3.
 - **No APU or joypad registers** — `$FF00` and `$FF10–$FF3F` are inert array
-  slots.
+  slots, as are `$FF48–$FF4B` (sprite palettes and window position).

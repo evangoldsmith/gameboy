@@ -9,8 +9,16 @@ constexpr uint16_t REG_TIMA = 0xFF05;  // Timer counter
 constexpr uint16_t REG_TMA  = 0xFF06;  // Timer modulo
 constexpr uint16_t REG_TAC  = 0xFF07;  // Timer control
 constexpr uint16_t REG_IF   = 0xFF0F;  // Interrupt flags
-constexpr uint16_t REG_STAT = 0xFF41;  // LCD status
-constexpr uint16_t REG_LY   = 0xFF44;  // LCD Y coordinate
+
+// $FF40–$FF45 and $FF47 belong to the PPU. $FF46 (OAM DMA) and $FF48–$FF4B
+// (sprite palettes, window position) are still inert array slots — Phase 7.
+constexpr uint16_t PPU_REG_FIRST = 0xFF40;
+constexpr uint16_t PPU_REG_LAST  = 0xFF45;
+constexpr uint16_t REG_BGP       = 0xFF47;
+
+constexpr bool isPpuReg(uint16_t addr) {
+    return (addr >= PPU_REG_FIRST && addr <= PPU_REG_LAST) || addr == REG_BGP;
+}
 }  // namespace
 
 MMU::MMU(Cartridge& cart, Serial& serial, Timer& timer, PPU& ppu)
@@ -21,9 +29,9 @@ uint8_t MMU::read(uint16_t addr) {
     if (addr < 0x8000)
         return m_cart.read(addr);
 
-    // $8000–$9FFF: VRAM
+    // $8000–$9FFF: VRAM (owned by the PPU)
     if (addr < 0xA000)
-        return m_vram[addr - 0x8000];
+        return m_ppu.readVram(addr);
 
     // $A000–$BFFF: External RAM (cartridge)
     if (addr < 0xC000)
@@ -37,9 +45,9 @@ uint8_t MMU::read(uint16_t addr) {
     if (addr < 0xFE00)
         return m_wram[addr - 0xE000];
 
-    // $FE00–$FE9F: OAM
+    // $FE00–$FE9F: OAM (owned by the PPU)
     if (addr < 0xFEA0)
-        return m_oam[addr - 0xFE00];
+        return m_ppu.readOam(addr);
 
     // $FEA0–$FEFF: Unusable
     if (addr < 0xFF00)
@@ -64,9 +72,9 @@ void MMU::write(uint16_t addr, uint8_t val) {
         return;
     }
 
-    // $8000–$9FFF: VRAM
+    // $8000–$9FFF: VRAM (owned by the PPU)
     if (addr < 0xA000) {
-        m_vram[addr - 0x8000] = val;
+        m_ppu.writeVram(addr, val);
         return;
     }
 
@@ -88,9 +96,9 @@ void MMU::write(uint16_t addr, uint8_t val) {
         return;
     }
 
-    // $FE00–$FE9F: OAM
+    // $FE00–$FE9F: OAM (owned by the PPU)
     if (addr < 0xFEA0) {
-        m_oam[addr - 0xFE00] = val;
+        m_ppu.writeOam(addr, val);
         return;
     }
 
@@ -127,9 +135,9 @@ uint8_t MMU::readIO(uint16_t addr) {
         case REG_TMA:  return m_timer.tma();
         case REG_TAC:  return m_timer.tac();
         case REG_IF:   return static_cast<uint8_t>(m_io[REG_IF - 0xFF00] | 0xE0);
-        case REG_STAT: return m_ppu.stat();
-        case REG_LY:   return m_ppu.ly();
-        default:       return m_io[addr - 0xFF00];
+        default:
+            if (isPpuReg(addr)) return m_ppu.readReg(addr);
+            return m_io[addr - 0xFF00];
     }
 }
 
@@ -141,7 +149,9 @@ void MMU::writeIO(uint16_t addr, uint8_t val) {
         case REG_TIMA: m_timer.writeTima(val); break;
         case REG_TMA:  m_timer.writeTma(val);  break;
         case REG_TAC:  m_timer.writeTac(val);  break;
-        case REG_LY:   break;                          // read-only
-        default:      m_io[addr - 0xFF00] = val; break;
+        default:
+            if (isPpuReg(addr)) m_ppu.writeReg(addr, val);
+            else                m_io[addr - 0xFF00] = val;
+            break;
     }
 }

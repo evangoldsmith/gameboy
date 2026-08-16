@@ -9,8 +9,8 @@
 
 namespace {
 
-constexpr int GB_WIDTH  = 160;
-constexpr int GB_HEIGHT = 144;
+constexpr int GB_WIDTH  = PPU::WIDTH;
+constexpr int GB_HEIGHT = PPU::HEIGHT;
 constexpr int SCALE     = 4;
 
 void printHeader(const CartridgeHeader& hdr) {
@@ -55,7 +55,10 @@ int runSDL(GameBoy& gb, const CartridgeHeader& hdr) {
         return EXIT_FAILURE;
     }
 
-    SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+    // PRESENTVSYNC paces the loop at the display's refresh rate. Close enough to
+    // the DMG's 59.7 Hz for now; real frame pacing is Phase 14.
+    SDL_Renderer* renderer = SDL_CreateRenderer(
+        window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     if (!renderer) {
         std::cerr << "SDL_CreateRenderer error: " << SDL_GetError() << "\n";
         SDL_DestroyWindow(window);
@@ -97,8 +100,9 @@ int runSDL(GameBoy& gb, const CartridgeHeader& hdr) {
 
         gb.runFrame();
 
-        // TODO: upload the PPU framebuffer once Phase 6 renders one.
-        // SDL_UpdateTexture(texture, nullptr, framebuffer.data(), GB_WIDTH * sizeof(uint32_t));
+        const auto& fb = gb.ppu().framebuffer();
+        SDL_UpdateTexture(texture, nullptr, fb.data(),
+                          GB_WIDTH * static_cast<int>(sizeof(uint32_t)));
 
         SDL_SetRenderDrawColor(renderer, 0x9B, 0xBC, 0x0F, 0xFF); // Classic GB green
         SDL_RenderClear(renderer);

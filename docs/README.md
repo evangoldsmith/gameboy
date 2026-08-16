@@ -9,7 +9,7 @@ works, and what is not implemented yet.
 | [cpu.md](cpu.md) | `src/cpu/cpu.{h,cpp}`, `src/cpu/opcodes.{h,cpp}` | Complete instruction set |
 | [mmu.md](mmu.md) | `src/memory/mmu.{h,cpp}` | Address routing + partial I/O dispatch |
 | [cartridge.md](cartridge.md) | `src/cartridge/cartridge.{h,cpp}` | Header parsing + minimal MBC1 |
-| [ppu.md](ppu.md) | `src/ppu/ppu.{h,cpp}` | Scanline timing only, no rendering |
+| [ppu.md](ppu.md) | `src/ppu/ppu.{h,cpp}` | Background rendering; no sprites or window |
 | [apu.md](apu.md) | `src/apu/apu.{h,cpp}` | **Stub** |
 | [timer.md](timer.md) | `src/timer.{h,cpp}` | DIV + TIMA with falling-edge clocking |
 | [joypad.md](joypad.md) | `src/joypad.{h,cpp}` | **Stub** |
@@ -45,9 +45,13 @@ cpu_instrs
 Passed all tests
 ```
 
-Next up is Phase 6 — the PPU, and the first thing that draws to the screen.
-`instr_timing` (the Phase 4 milestone ROM) and the Mooneye suite are not in
-`roms/`, so timer edge cases are implemented to spec but unverified beyond what
-`cpu_instrs` exercises.
+The background layer also renders. Running `cpu_instrs` headlessly for 4000
+frames and dumping the framebuffer produces the full results screen, so tile
+maps, both tile-data addressing modes, palette mapping, and scrolling all work.
+
+Next up is Phase 7 — sprites, the window layer, and OAM DMA, whose milestone is
+the `dmg-acid2` test. `instr_timing`, `dmg-acid2`, and the Mooneye suite are not
+in `roms/`, so timer and PPU edge cases are implemented to spec but unverified
+beyond what `cpu_instrs` exercises.
 
 See `roadmap.md` for the phase plan this is tracking against.

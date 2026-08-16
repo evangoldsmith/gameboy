@@ -27,9 +27,8 @@ private:
     Timer&     m_timer;
     PPU&       m_ppu;
 
-    std::array<uint8_t, 0x2000> m_vram{};  // $8000–$9FFF  8 KB
+    // VRAM and OAM belong to the PPU; the MMU only routes to them.
     std::array<uint8_t, 0x2000> m_wram{};  // $C000–$DFFF  8 KB
-    std::array<uint8_t, 0x00A0> m_oam{};   // $FE00–$FE9F 160 B
     std::array<uint8_t, 0x0080> m_io{};    // $FF00–$FF7F 128 B
     std::array<uint8_t, 0x007F> m_hram{};  // $FF80–$FFFE 127 B
     uint8_t                     m_ie{};    // $FFFF
