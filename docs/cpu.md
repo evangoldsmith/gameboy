@@ -69,6 +69,20 @@ that `PUSH`/`POP` use a *different* mapping where index 3 is `AF` instead of
 `SP`, so those four opcodes are written out longhand rather than going through
 `readR16`.
 
+## Start-up state
+
+The constructor branches on whether a boot ROM will run:
+
+- **With one** — every register is left at zero and execution begins at `$0000`.
+  The boot ROM establishes the machine state itself, which is the entire point
+  of running it.
+- **Without one** — the registers are set to the values a boot ROM would have
+  left (`AF=$01B0 BC=$0013 DE=$00D8 HL=$014D SP=$FFFE PC=$0100`) and `$FF50` is
+  written immediately so the overlay is already unmapped.
+
+`AF=$01B0` is not arbitrary: the `$01` in A is what Pokémon Red checks at
+`$0150` to tell a DMG from a Game Boy Color, which leaves `$11` there instead.
+
 ## Cycle accounting
 
 Time is spent **one M-cycle at a time from inside the instruction**, not

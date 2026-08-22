@@ -6,6 +6,19 @@ Download your own roms and add the `*.gb` files into the roms/ directory.
 
 Games with a battery-backed cartridge save to a `.sav` file next to the ROM.
 
+## Boot ROM (optional)
+
+Drop a 256-byte boot ROM at `roms/dmg_boot.bin` and it runs on startup — the
+scrolling Nintendo logo and the chime. Without one the emulator jumps straight
+into the game, which is the default.
+
+Nintendo's original boot ROM is copyrighted. [Bootix](https://github.com/Hacktix/Bootix)
+is an MIT-licensed drop-in reimplementation; SameBoy also ships open ones.
+
+```bash
+make run ROM=roms/tetris.gb --boot path/to/boot.bin   # or just place it at roms/dmg_boot.bin
+```
+
 ## Running
 
 ```bash

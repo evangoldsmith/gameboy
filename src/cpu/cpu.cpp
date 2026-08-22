@@ -7,7 +7,14 @@
 #include <cstdlib>
 
 CPU::CPU(MMU& mmu) : m_mmu(mmu) {
-    // Post-boot register state (DMG). Lets us skip the boot ROM and jump
+    if (m_mmu.bootRomActive()) {
+        // Cold start: every register is zero and execution begins at $0000.
+        // The boot ROM establishes the state below itself, which is the whole
+        // point of running it.
+        return;
+    }
+
+    // No boot ROM, so fake the state one would have left behind and jump
     // straight into cartridge code at $0100. See roadmap Phase 1.
     m_af = 0x01B0;
     m_bc = 0x0013;
@@ -16,7 +23,7 @@ CPU::CPU(MMU& mmu) : m_mmu(mmu) {
     m_sp = 0xFFFE;
     m_pc = 0x0100;
 
-    m_mmu.write(0xFF50, 0x01);  // boot ROM unmapped
+    m_mmu.write(0xFF50, 0x01);  // boot ROM already unmapped
 }
 
 // ── Flags ────────────────────────────────────────────────────────────────────

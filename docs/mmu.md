@@ -49,6 +49,7 @@ start.
 
 | Range | Destination | Notes |
 |---|---|---|
+| `$0000–$00FF` | `m_bootRom` | **Only while the boot ROM is mapped**; see below |
 | `$0000–$7FFF` | `Cartridge::read/write` | ROM; writes go to MBC registers |
 | `$8000–$9FFF` | `PPU::readVram/writeVram` | 8 KB, owned by the PPU |
 | `$A000–$BFFF` | `Cartridge::read/write` | External RAM, if present |
@@ -96,6 +97,28 @@ its own registers.
 as `$FF`; excluding them let them fall through to `m_io` and read back `$00`,
 which failed Blargg's `dmg_sound` `01-registers`.
 
+## The boot ROM overlay
+
+When a 256-byte boot ROM is supplied it shadows `$0000–$00FF` until it unmaps
+itself:
+
+```cpp
+if (m_bootActive && addr < 0x0100) return m_bootRom[addr];
+```
+
+The overlay stops at `$0100`, which is deliberate — the cartridge header sits at
+`$0104–$014F` and the boot ROM has to *read* the Nintendo logo it is about to
+verify. Shadowing it would hide the very data being checked.
+
+Writing a non-zero value to **`$FF50`** clears `m_bootActive`, and nothing sets
+it again: it is a one-way latch, so a game cannot map the boot ROM back in. A
+real boot ROM's final instruction is that write, sitting at `$00FE–$00FF`, so
+execution falls straight through into cartridge code at `$0100` with the overlay
+already gone.
+
+With no boot ROM the region is cartridge ROM from the start and the CPU begins
+in its post-boot state instead — see [cpu.md](cpu.md).
+
 ## OAM DMA
 
 `$FF46` sits in the middle of the PPU's register range but is handled here,
@@ -126,9 +149,6 @@ currently have a live component behind them.
 
 ## Not implemented yet
 
-- **No boot ROM overlay.** `$FF50` is written once at CPU construction to mark
-  the boot ROM as unmapped, and `$0000–$00FF` always reads cartridge ROM. Phase
-  6/13 adds the real 256-byte overlay.
 - **OAM DMA is instantaneous** rather than taking 160 M-cycles, and does not
   restrict the CPU to HRAM while it runs.
 - **No access restrictions.** VRAM and OAM are readable at all times; hardware

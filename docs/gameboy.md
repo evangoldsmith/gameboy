@@ -9,7 +9,10 @@ else.
 ## Public API
 
 ```cpp
-explicit GameBoy(const std::string& romPath);   // throws std::runtime_error
+explicit GameBoy(const std::string& romPath,
+                 const std::string& bootPath = "");   // throws std::runtime_error
+static std::vector<uint8_t> loadBootRom(const std::string& path);
+bool bootRomActive() const;
 
 uint8_t step();       // one instruction + peripheral catch-up; returns T-cycles
 void    runFrame();   // TCYCLES_PER_FRAME worth of steps
@@ -39,7 +42,8 @@ Timer      m_timer
 PPU        m_ppu
 Joypad     m_joypad
 APU        m_apu
-MMU        m_mmu       // needs cart, serial, timer, ppu, joypad, apu
+vector     m_bootRom   // must precede the MMU, which consumes it
+MMU        m_mmu       // needs cart, serial, timer, ppu, joypad, apu, bootRom
 CPU        m_cpu       // needs mmu
 ```
 
@@ -64,6 +68,26 @@ to make `mem_timing` fail. See [mmu.md](mmu.md) and [cpu.md](cpu.md).
 Peripherals keep running while the CPU is halted, because `CPU::step()` ticks 4
 cycles per halted step rather than returning zero. That is what eventually
 produces the interrupt that wakes it.
+
+## Cold start
+
+`loadBootRom()` returns empty for a blank path, a missing file, or anything that
+is not exactly 256 bytes — a wrong size is rejected with a warning rather than
+padded, since running it would fail confusingly much later. A missing boot ROM
+is a normal configuration, not an error.
+
+When one *is* present the constructor also hands the machine over cold:
+
+```cpp
+m_mmu.write(0xFF40, 0x00);  // LCDC: LCD off
+m_mmu.write(0xFF47, 0x00);  // BGP
+m_mmu.write(0xFF48, 0x00);  // OBP0
+m_mmu.write(0xFF49, 0x00);  // OBP1
+```
+
+The components default to post-boot values because that is the common case. With
+a boot ROM actually running, leaving those defaults in place would have the LCD
+already on and rendering before the boot ROM had configured anything.
 
 ## Interrupt routing
 

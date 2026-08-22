@@ -7,6 +7,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <filesystem>
 
 namespace {
 
@@ -217,15 +218,22 @@ int runSDL(GameBoy& gb, const CartridgeHeader& hdr) {
 
 int main(int argc, char* argv[]) {
     if (argc < 2) {
-        std::cerr << "Usage: gameboy <rom.gb> [--doctor [steps]]\n";
+        std::cerr << "Usage: gameboy <rom.gb> [--boot <boot.bin>] [--doctor [steps]]\n";
         return EXIT_FAILURE;
     }
 
     bool doctor   = false;
     long maxSteps = 1'000'000;
+    std::string bootPath;
     for (int i = 2; i < argc; ++i) {
         const std::string_view arg{argv[i]};
-        if (arg == "--doctor") {
+        if (arg == "--boot") {
+            if (i + 1 >= argc) {
+                std::cerr << "--boot needs a file path\n";
+                return EXIT_FAILURE;
+            }
+            bootPath = argv[++i];
+        } else if (arg == "--doctor") {
             doctor = true;
             if (i + 1 < argc) {
                 if (const long n = std::strtol(argv[i + 1], nullptr, 10); n > 0) {
@@ -239,12 +247,22 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    // Fall back to the conventional filenames so `make run` picks one up
+    // without extra flags.
+    if (bootPath.empty()) {
+        for (const char* candidate : {"roms/dmg_boot.bin", "roms/boot.bin"}) {
+            if (std::filesystem::exists(candidate)) { bootPath = candidate; break; }
+        }
+    }
+
     try {
-        GameBoy gb(argv[1]);
+        GameBoy gb(argv[1], bootPath);
 
         if (doctor) return runDoctor(gb, maxSteps);
 
         printHeader(gb.header());
+        std::cout << "Boot ROM: " << (gb.bootRomActive() ? bootPath : "none (skipped)")
+                  << "\n";
         return runSDL(gb, gb.header());
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << "\n";

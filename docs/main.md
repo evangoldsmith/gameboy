@@ -9,8 +9,13 @@ SDL dependency, which is what makes headless test runs possible.
 ## Usage
 
 ```
-gameboy <rom.gb> [--doctor [steps]]
+gameboy <rom.gb> [--boot <boot.bin>] [--doctor [steps]]
 ```
+
+`--boot` supplies a 256-byte boot ROM. Without the flag the frontend looks for
+`roms/dmg_boot.bin` then `roms/boot.bin`, so `make run` picks one up
+automatically; with neither present the emulator jumps straight to `$0100` as
+before. The header dump reports which was used.
 
 | Mode | Behaviour |
 |---|---|

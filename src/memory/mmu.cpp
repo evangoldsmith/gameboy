@@ -11,7 +11,8 @@ constexpr uint16_t REG_TAC  = 0xFF07;  // Timer control
 constexpr uint16_t REG_P1   = 0xFF00;  // Joypad
 constexpr uint16_t REG_IF   = 0xFF0F;  // Interrupt flags
 
-constexpr uint16_t REG_DMA = 0xFF46;  // OAM DMA source
+constexpr uint16_t REG_DMA  = 0xFF46;  // OAM DMA source
+constexpr uint16_t REG_BOOT = 0xFF50;  // boot ROM unmap latch
 
 // $FF10-$FF26 are the sound registers and $FF30-$FF3F is wave RAM. The gap at
 // $FF27-$FF2F is unused but still belongs to the APU: those addresses read as
@@ -29,9 +30,9 @@ constexpr bool isPpuReg(uint16_t addr) {
 }  // namespace
 
 MMU::MMU(Cartridge& cart, Serial& serial, Timer& timer, PPU& ppu, Joypad& joypad,
-         APU& apu)
+         APU& apu, std::vector<uint8_t> bootRom)
     : m_cart(cart), m_serial(serial), m_timer(timer), m_ppu(ppu), m_joypad(joypad),
-      m_apu(apu) {}
+      m_apu(apu), m_bootRom(std::move(bootRom)), m_bootActive(!m_bootRom.empty()) {}
 
 void MMU::requestInterrupt(Interrupt which) {
     const uint8_t bit = static_cast<uint8_t>(1u << static_cast<uint8_t>(which));
@@ -57,6 +58,12 @@ void MMU::tick(uint8_t tcycles) {
 }
 
 uint8_t MMU::read(uint16_t addr) {
+    // $0000–$00FF: the boot ROM shadows cartridge ROM until it unmaps itself.
+    // The cartridge header at $0100 onwards is never covered, which is how the
+    // boot ROM reads the logo it is about to verify.
+    if (m_bootActive && addr < 0x0100)
+        return m_bootRom[addr];
+
     // $0000–$7FFF: Cartridge ROM
     if (addr < 0x8000)
         return m_cart.read(addr);
@@ -197,6 +204,11 @@ void MMU::writeIO(uint16_t addr, uint8_t val) {
         case REG_DMA:
             m_io[REG_DMA - 0xFF00] = val;  // reads back the last source written
             oamDma(val);
+            break;
+        case REG_BOOT:
+            // One-way latch: once the boot ROM is unmapped nothing maps it back.
+            if (val != 0) m_bootActive = false;
+            m_io[REG_BOOT - 0xFF00] = val;
             break;
         default:
             if (isPpuReg(addr))      m_ppu.writeReg(addr, val);

@@ -12,14 +12,24 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 class GameBoy {
 public:
     // 154 scanlines x 456 dots.
     static constexpr uint32_t TCYCLES_PER_FRAME = 70224;
 
-    // Throws std::runtime_error if the ROM cannot be loaded.
-    explicit GameBoy(const std::string& romPath);
+    // Throws std::runtime_error if the ROM cannot be loaded. bootPath is
+    // optional: with a 256-byte boot ROM the system cold-starts at $0000 and
+    // plays the startup sequence, without one it jumps straight to $0100.
+    explicit GameBoy(const std::string& romPath, const std::string& bootPath = "");
+
+    // Reads a 256-byte boot ROM, or returns empty if the path is blank, missing
+    // or the wrong size. A missing boot ROM is a normal configuration, not an
+    // error.
+    static std::vector<uint8_t> loadBootRom(const std::string& path);
+
+    bool bootRomActive() const { return m_mmu.bootRomActive(); }
 
     // Runs one instruction and advances every peripheral by the same number of
     // T-cycles. Returns the T-cycles consumed.
@@ -50,6 +60,8 @@ private:
     PPU       m_ppu;
     Joypad    m_joypad;
     APU       m_apu;
+    // Declared before the MMU because the MMU consumes it.
+    std::vector<uint8_t> m_bootRom;
     MMU       m_mmu;
     CPU       m_cpu;
 };
