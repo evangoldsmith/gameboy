@@ -63,6 +63,11 @@ away:
 ./build/release/gameboy roms/cpu_instrs.gb --doctor > trace.log
 ```
 
+## Testing
+
+CI builds both configurations and runs the test ROMs on every pull request. To
+run them locally, see [docs/testing.md](docs/testing.md).
+
 ## Documentation
 
 [`docs/`](docs/) has one file per component covering what it owns, how the logic

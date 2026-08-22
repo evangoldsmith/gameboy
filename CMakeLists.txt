@@ -53,6 +53,10 @@ add_library(gameboy_core STATIC
 
 target_include_directories(gameboy_core PUBLIC ${PROJECT_SOURCE_DIR}/src)
 
+# ── Headless test-ROM runner (no SDL) ──────────────────────────────────────────
+add_executable(gbrun tests/gbrun.cpp)
+target_link_libraries(gbrun PRIVATE gameboy_core)
+
 # ── Frontend executable (SDL2 lives only here) ─────────────────────────────────
 add_executable(gameboy src/main.cpp)
 target_link_libraries(gameboy PRIVATE gameboy_core SDL2::SDL2)

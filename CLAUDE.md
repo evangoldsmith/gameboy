@@ -43,6 +43,14 @@ The project splits into two compilation units:
 
 The `GameBoy` class in `src/gameboy.h` is the central orchestrator — it owns all subsystem instances and drives the main emulation loop.
 
+## Contributing
+
+**All changes go through a pull request.** Branch, push, open a PR, let CI pass, then merge. Do not commit directly to `main`.
+
+CI (`.github/workflows/ci.yml`) builds both configurations with `-Werror` and then runs the test ROMs, which it downloads from a pinned release rather than the repo. See [docs/testing.md](docs/testing.md).
+
+Note that CI uses GCC while local development is usually Clang; a clean local build is not proof of a clean CI build.
+
 ## Documentation
 
 `docs/` holds one Markdown file per component, indexed by `docs/README.md` and linked from the table above. Each covers responsibility, public API, how the logic actually works, current state, and an explicit "Not implemented yet" list.

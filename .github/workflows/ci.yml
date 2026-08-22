@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A second push to a PR makes the first run irrelevant.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Pinned rather than "latest" so a new upstream release cannot change what CI
+  # checks without a commit saying so.
+  TEST_ROMS_URL: https://github.com/c-sp/game-boy-test-roms/releases/download/v7.0/game-boy-test-roms-v7.0.zip
+
+jobs:
+  build-and-test:
+    name: Build and run test ROMs
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsdl2-dev
+          python3 -m pip install --upgrade pillow
+
+      # ── Step 1: it has to build, in both configurations, without warnings ──
+      # -Werror enforces the warning-clean rule from CLAUDE.md. The runner uses
+      # GCC while local development is usually Clang, and the two disagree about
+      # some conversions, so this catches what a local build would not.
+      - name: Build (debug)
+        run: |
+          cmake -S . -B build/debug -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS=-Werror
+          cmake --build build/debug --parallel
+
+      - name: Build (release)
+        run: |
+          cmake -S . -B build/release -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS=-Werror
+          cmake --build build/release --parallel
+
+      # ── Step 2: only once it builds, run the test ROMs ────────────────────
+      # The repository is deliberately free of ROM files, so they are fetched
+      # here instead of vendored.
+      - name: Download test ROMs
+        run: |
+          curl -fsSL -o test-roms.zip "$TEST_ROMS_URL"
+          mkdir -p test-roms
+          unzip -q test-roms.zip -d test-roms
+
+      - name: Run test ROMs
+        run: python3 tests/run_tests.py build/release/gbrun test-roms --out test-output
+
+      # Each suite's final screen, so a failure can be looked at rather than
+      # guessed at. Uploaded even when the run failed — especially then.
+      - name: Upload result screens
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-screens
+          path: test-output/
+          if-no-files-found: warn
