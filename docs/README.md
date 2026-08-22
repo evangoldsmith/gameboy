@@ -17,6 +17,7 @@ works, and what is not implemented yet.
 | [gameboy.md](gameboy.md) | `src/gameboy.{h,cpp}` | Wiring + step/frame loop |
 | [logger.md](logger.md) | `src/debug/logger.{h,cpp}` | Game Boy Doctor trace format |
 | [main.md](main.md) | `src/main.cpp` | SDL frontend + headless trace mode |
+| [testing.md](testing.md) | `tests/`, `.github/workflows/` | CI: build, then test ROMs |
 
 ## Reading order
 

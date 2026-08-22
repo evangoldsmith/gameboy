@@ -207,7 +207,8 @@ void PPU::renderBackground(LineIndices& bgIndex) {
 
     for (int x = 0; x < WIDTH; ++x) {
         const uint8_t bgX     = static_cast<uint8_t>(m_scx + x);
-        const uint8_t tileIdx = m_vram[mapBase + rowOff + (bgX / 8)];
+        const uint8_t tileIdx =
+            m_vram[static_cast<unsigned>(mapBase + rowOff + (bgX / 8))];
 
         // LCDC bit 4 picks the addressing mode: $8000 with an unsigned index,
         // or $9000 with a signed one (VRAM offsets $0000 and $1000).
