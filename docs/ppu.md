@@ -222,8 +222,13 @@ than a lucky one.
 ## Not implemented yet
 
 - **No OAM bug.** DMG corrupts OAM when a 16-bit access lands in `$FE00–$FEFF`
-  during mode 2. Blargg's `oam_bug` 1, 2, 4, 5, 7 and 8 all test that the
-  corruption happens, and all fail.
+  during mode 2. Implemented faithfully to spec twice and reverted both times:
+  it scores 1/8, *worse* than the 2/8 of not having it, because
+  `06-timing_no_bug` fails at any M-cycle phase and with any subset of the
+  trigger list. Bisecting showed corruption on ordinary accesses is harmless
+  and the increment/decrement-driven path is what breaks it — which points at
+  scanline timing rather than the bug logic. Revisit after variable mode 3
+  length and precise mode transitions. See `roadmap.md`.
 - **No VRAM/OAM access restrictions.** Hardware blocks CPU access during modes 2
   and 3; here it is always allowed.
 - **Mode 3 length is fixed**, so mid-scanline raster effects will not render
