@@ -13,7 +13,8 @@ and `APU`. It does not own them — `GameBoy` does.
 ## Public API
 
 ```cpp
-MMU(Cartridge& cart, Serial& serial, Timer& timer, PPU& ppu);
+MMU(Cartridge& cart, Serial& serial, Timer& timer, PPU& ppu, Joypad& joypad,
+    APU& apu);
 
 uint8_t read(uint16_t addr);
 void    write(uint16_t addr, uint8_t val);
@@ -132,5 +133,4 @@ currently have a live component behind them.
   restrict the CPU to HRAM while it runs.
 - **No access restrictions.** VRAM and OAM are readable at all times; hardware
   blocks them during PPU modes 2 and 3.
-- **Sound channels 3 and 4 are not implemented**, so their registers are stored
-  by the APU but have no effect. See [apu.md](apu.md).
+- **The APU's wave-RAM access window is approximate** — see [apu.md](apu.md).

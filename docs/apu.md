@@ -271,9 +271,6 @@ sub-M-cycle resolution on the wave position — see [cpu.md](cpu.md).
 
 ## Not implemented yet
 
-- **The frame sequencer runs on its own counter**, not off DIV bit 4 as the
-  hardware does. Writing to DIV therefore cannot clock the sequencer, which is
-  likely behind the length-counter failures above.
 - **The wave-RAM corruption quirk is not emulated** — on DMG, retriggering
   channel 3 while it is reading can corrupt the first four bytes.
 - **7-bit LFSR periodicity is not separately verified.** Both widths produce
