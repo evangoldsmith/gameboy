@@ -16,8 +16,11 @@ Nintendo's original boot ROM is copyrighted. [Bootix](https://github.com/Hacktix
 is an MIT-licensed drop-in reimplementation; SameBoy also ships open ones.
 
 ```bash
-make run ROM=roms/tetris.gb --boot path/to/boot.bin   # or just place it at roms/dmg_boot.bin
+./build/debug/gameboy roms/tetris.gb --boot path/to/boot.bin
 ```
+
+`make run` doesn't forward extra flags, so for that route put the file at
+`roms/dmg_boot.bin` and it's picked up automatically.
 
 ## Running
 
