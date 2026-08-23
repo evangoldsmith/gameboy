@@ -53,35 +53,44 @@ add_library(gameboy_core STATIC
 
 target_include_directories(gameboy_core PUBLIC ${PROJECT_SOURCE_DIR}/src)
 
-# ── Unit tests ─────────────────────────────────────────────────────────────────
-# doctest is a single header pulled at configure time rather than vendored. It
-# compiles fast enough that a full test binary is not a burden, and keeping it
-# out of the tree means nothing third-party lives in src/.
-include(FetchContent)
-FetchContent_Declare(
-    doctest
-    GIT_REPOSITORY https://github.com/doctest/doctest.git
-    GIT_TAG        v2.4.11
-    # doctest is header-only, and its own CMakeLists declares a minimum below
-    # what CMake 4 still accepts. Pointing SOURCE_SUBDIR at a directory that
-    # does not exist fetches the source without configuring it, which is all we
-    # need — the header is used directly via the include path below.
-    SOURCE_SUBDIR  header-only-no-cmake
-)
-FetchContent_MakeAvailable(doctest)
+# ── Unit tests (debug builds only) ─────────────────────────────────────────────
+# Release is what ships, so it should not pay to compile a test binary — nor to
+# fetch a test framework at configure time, which would make a release build
+# need the network. Override with -DGB_BUILD_TESTS=ON if you want them anyway.
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(GB_BUILD_TESTS_DEFAULT ON)
+else()
+    set(GB_BUILD_TESTS_DEFAULT OFF)
+endif()
+option(GB_BUILD_TESTS "Build the unit test binary" ${GB_BUILD_TESTS_DEFAULT})
 
-add_executable(unit_tests
-    tests/unit/main.cpp
-    tests/unit/test_timer.cpp
-    tests/unit/test_joypad.cpp
-    tests/unit/test_apu_channels.cpp
-    tests/unit/test_cartridge.cpp
-)
-target_link_libraries(unit_tests PRIVATE gameboy_core)
-target_include_directories(unit_tests PRIVATE ${doctest_SOURCE_DIR})
+if(GB_BUILD_TESTS)
+    # doctest is header-only and fetched rather than vendored, so nothing
+    # third-party lives in the tree. SOURCE_SUBDIR points at a directory that
+    # does not exist so the source is fetched without being configured: its own
+    # CMakeLists declares a minimum below what CMake 4 still accepts.
+    include(FetchContent)
+    FetchContent_Declare(
+        doctest
+        GIT_REPOSITORY https://github.com/doctest/doctest.git
+        GIT_TAG        v2.4.11
+        SOURCE_SUBDIR  header-only-no-cmake
+    )
+    FetchContent_MakeAvailable(doctest)
 
-enable_testing()
-add_test(NAME unit_tests COMMAND unit_tests)
+    add_executable(unit_tests
+        tests/unit/main.cpp
+        tests/unit/test_timer.cpp
+        tests/unit/test_joypad.cpp
+        tests/unit/test_apu_channels.cpp
+        tests/unit/test_cartridge.cpp
+    )
+    target_link_libraries(unit_tests PRIVATE gameboy_core)
+    target_include_directories(unit_tests PRIVATE ${doctest_SOURCE_DIR})
+
+    enable_testing()
+    add_test(NAME unit_tests COMMAND unit_tests)
+endif()
 
 # ── Headless test-ROM runner (no SDL) ──────────────────────────────────────────
 add_executable(gbrun tests/gbrun.cpp)

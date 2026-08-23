@@ -2,6 +2,7 @@
 # Usage:
 #   make          – debug build
 #   make release  – optimised release build
+#   make test     – debug build + run the unit tests
 #   make run      – debug build + launch (optionally: make run ROM=path/to/rom.gb)
 #   make clean    – remove build artefacts
 #   make distclean – remove all build directories
@@ -36,6 +37,14 @@ release: $(RELEASE_DIR)/Makefile
 $(RELEASE_DIR)/Makefile:
 	$(CMAKE) -S . -B $(RELEASE_DIR) -DCMAKE_BUILD_TYPE=Release $(CMAKE_FLAGS)
 
+# ── Tests ──────────────────────────────────────────────────────────────────────
+# Unit tests are a debug-build artefact, so this always builds debug first.
+# Pass doctest flags through with TEST_ARGS, e.g.
+#   make test TEST_ARGS="-ts=timer"
+.PHONY: test
+test: debug
+	./$(DEBUG_DIR)/unit_tests $(TEST_ARGS)
+
 # ── Run ────────────────────────────────────────────────────────────────────────
 .PHONY: run
 run: debug
@@ -67,6 +76,7 @@ help:
 	@echo "Targets:"
 	@echo "  all / debug     – debug build (default)"
 	@echo "  release         – optimised release build"
+	@echo "  test [TEST_ARGS=..]  – build (debug) and run the unit tests"
 	@echo "  run [ROM=<path>]     – build (debug) and launch"
 	@echo "  run-release [ROM=<path>] – build (release) and launch"
 	@echo "  reconfigure     – re-run CMake for both configs"

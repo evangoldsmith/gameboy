@@ -44,8 +44,10 @@ jobs:
           cmake --build build/release --parallel
 
       # ── Step 2: unit tests, which need no ROMs and fail fast ──────────────
+      # Built only in debug — release deliberately excludes them, so this uses
+      # the debug binary produced above.
       - name: Unit tests
-        run: ./build/release/unit_tests
+        run: ./build/debug/unit_tests
 
       # ── Step 3: only once that passes, run the test ROMs ──────────────────
       # The repository is deliberately free of ROM files, so they are fetched

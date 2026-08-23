@@ -8,6 +8,9 @@
 
 #include <doctest/doctest.h>
 
+// Groups these under a name so `make test TEST_ARGS="-ts=apu"` works.
+TEST_SUITE_BEGIN("apu");
+
 #include <vector>
 
 TEST_CASE("VolumeEnvelope reads back exactly what was written") {
@@ -233,3 +236,5 @@ TEST_CASE("wave RAM survives an APU power cycle") {
     ch.powerOff();
     CHECK(ch.readWaveRam(3) == 0x7E);
 }
+
+TEST_SUITE_END();

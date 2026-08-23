@@ -20,9 +20,14 @@ CMake fetches the source without configuring it — its own `CMakeLists.txt`
 declares a minimum below what CMake 4 accepts.
 
 ```bash
-make release
-./build/release/unit_tests            # or: ctest --test-dir build/release
+make test                             # builds debug, then runs them
+make test TEST_ARGS="-ts=timer"       # one suite: timer, joypad, apu, cartridge
 ```
+
+The binary is a **debug-build artefact only**. Release is what ships, so it does
+not pay to compile a test binary — nor to fetch a test framework at configure
+time, which would otherwise make a release build require the network. Pass
+`-DGB_BUILD_TESTS=ON` to build them in a release tree anyway.
 
 What is covered, and why those pieces:
 

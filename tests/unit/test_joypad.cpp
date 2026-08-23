@@ -6,6 +6,9 @@
 
 #include <doctest/doctest.h>
 
+// Groups these under a name so `make test TEST_ARGS="-ts=joypad"` works.
+TEST_SUITE_BEGIN("joypad");
+
 namespace {
 constexpr uint8_t SELECT_DIRS    = 0x10;  // clear this bit to select directions
 constexpr uint8_t SELECT_ACTIONS = 0x20;
@@ -86,3 +89,5 @@ TEST_CASE("the row select bits read back, the button bits do not") {
     j.write(SELECT_DIRS);                           // actions selected
     CHECK((j.read() & 0x30) == SELECT_DIRS);
 }
+
+TEST_SUITE_END();

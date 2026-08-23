@@ -6,6 +6,9 @@
 
 #include <doctest/doctest.h>
 
+// Groups these under a name so `make test TEST_ARGS="-ts=timer"` works.
+TEST_SUITE_BEGIN("timer");
+
 namespace {
 
 // Advances the timer in the 4-cycle steps CPU::step() always produces.
@@ -143,3 +146,5 @@ TEST_CASE("TAC reads back with its unused bits set") {
     t.writeTac(0x05);
     CHECK(t.tac() == 0xFD);          // bits 3-7 do not exist and read as ones
 }
+
+TEST_SUITE_END();

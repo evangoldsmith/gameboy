@@ -7,6 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 make debug          # Build debug version (default)
 make release        # Build optimized release version
+make test           # Build debug + run the unit tests (TEST_ARGS= passes doctest flags)
 make run            # Build debug + run (ROM=path/to/rom.gb to specify ROM)
 make run-release    # Build release + run
 make clean          # Remove build artifacts
@@ -15,6 +16,8 @@ make reconfigure    # Re-run CMake configuration
 ```
 
 Build outputs go to `build/debug/` or `build/release/`. The main binary is `build/<config>/gameboy`.
+
+The `unit_tests` binary is built **only in debug**, so release builds neither compile it nor fetch doctest.
 
 **Dependency**: SDL2 must be installed (`brew install sdl2` on macOS).
 

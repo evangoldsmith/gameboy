@@ -10,6 +10,9 @@
 
 #include <doctest/doctest.h>
 
+// Groups these under a name so `make test TEST_ARGS="-ts=cartridge"` works.
+TEST_SUITE_BEGIN("cartridge");
+
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -193,3 +196,5 @@ TEST_CASE("a cartridge with no mapper ignores register writes") {
     cart.write(0x2000, 0x03);
     CHECK(mappedBank(cart) == 1);          // still the fixed second bank
 }
+
+TEST_SUITE_END();
