@@ -46,6 +46,28 @@ screens are what actually gate. That matters because several suites
 (`halt_bug`, `dmg_sound`, `oam_bug`) report only on screen and emit nothing over
 serial.
 
+### Mooneye
+
+Mooneye ROMs decide for themselves: each executes `LD B,B` when finished and
+passes only if the registers hold **B=3 C=5 D=8 E=13 H=21 L=34** — a sequence
+unlikely to arise by accident. `gbrun --mooneye` runs until that breakpoint or a
+120-second emulated timeout and exits 0 or 1 accordingly.
+
+`LD B,B` is a legitimate no-op a real game may execute, so `CPU::setBreakOnLdBB`
+is **off by default** and only the test harness turns it on.
+
+Only ROMs targeting the hardware we emulate are run. Mooneye names applicable
+models after a hyphen, so `MOONEYE_MODELS` keeps no-suffix, `GS` (the whole
+non-colour family), `dmgABC` and `dmgABCmgb`, and skips `dmg0`, `mgb`, `sgb`,
+`sgb2` and everything CGB or AGB.
+
+These are gated **on a baseline count** rather than all-or-nothing: CI fails if
+fewer pass than last time, so improvements cost nothing but regressions are
+caught. Raise `MOONEYE_BASELINE` when tests start passing — that is what stops
+a gain being lost again later.
+
+`--verbose` lists the individual failures.
+
 ### What is gated
 
 | Suite | Gated | Status |
@@ -57,6 +79,25 @@ serial.
 | `dmg-acid2` | yes | pass, pixel-exact |
 | `dmg_sound` | no | 9/12 — wave-RAM access window |
 | `oam_bug` | no | 2/8 — deferred, see `roadmap.md` |
+| Mooneye `acceptance` | baseline | 32/66 |
+| Mooneye `emulator-only` | baseline | 25/28 (MBC tests) |
+
+### What the Mooneye failures say
+
+They cluster, and each cluster maps onto a gap this documentation already
+records:
+
+| Cluster | Tests | Cause |
+|---|---|---|
+| Instruction timing (`call`, `jp`, `ret`, `rst`, `push`, `add_sp`) | 12 | Which M-cycle *within* an instruction each access lands on. `mem_timing` passes, so this is a finer distinction than that suite makes |
+| PPU timing (`intr_2_*`, `lcdon_*`, `stat_lyc_onoff`, `hblank_ly_scx`) | 9 | Fixed mode 3 length and imprecise mode transitions — see [ppu.md](ppu.md) |
+| OAM DMA (`oam_dma_*`, `sources`) | 4 | The copy is instantaneous rather than 160 M-cycles — see [mmu.md](mmu.md) |
+| Timer (`rapid_toggle`, `tima_write_reloading`, `tma_write_reloading`) | 3 | Sub-M-cycle write timing — see [timer.md](timer.md) |
+| MBC1 (`bits_mode`, `ram_256kb`) | 2 | MBC1 mode 1 banking is unimplemented — see [cartridge.md](cartridge.md) |
+
+The PPU cluster is the one worth attacking first: it is the largest, and it also
+blocks the OAM corruption bug, which failed twice for want of exactly this
+precision.
 
 The two ungated suites are run and reported but cannot fail the build; they
 track known gaps, and each carries a note saying what is missing. Gating them

@@ -1,11 +1,16 @@
 // Headless test-ROM runner.
 //
-//   gbrun <rom> <frames> [out.bmp]
+//   gbrun <rom> <frames> [out.bmp]      screen/serial suites (Blargg, acid2)
+//   gbrun --mooneye <rom>               Mooneye test suite
 //
-// Runs the ROM for a fixed number of frames, prints whatever it sent over the
-// serial port to stdout, and optionally writes the final framebuffer as a
-// 24-bit BMP. Deciding pass or fail is left to tests/run_tests.py — this only
-// produces the evidence.
+// In the default mode it runs the ROM for a fixed number of frames, prints
+// whatever it sent over the serial port to stdout, and optionally writes the
+// final framebuffer as a 24-bit BMP. Deciding pass or fail is left to
+// tests/run_tests.py — this only produces the evidence.
+//
+// In --mooneye mode it decides for itself, because the protocol is exact:
+// the ROM executes LD B,B when finished and passes only if the registers hold
+// the Fibonacci sequence. Exit status is 0 for pass, 1 for fail.
 //
 // Links gameboy_core only, so it needs no SDL and runs anywhere.
 
@@ -66,9 +71,51 @@ void writeBmp(GameBoy& gb, const char* path) {
 
 }  // namespace
 
+// Mooneye ROMs finish by executing LD B,B and leaving B=3 C=5 D=8 E=13 H=21
+// L=34 — a sequence unlikely to arise by accident. Anything else, including
+// never reaching the breakpoint, is a failure.
+int runMooneye(const char* romPath) {
+    // The suite guarantees every test finishes within 120 emulated seconds.
+    constexpr uint64_t TIMEOUT_CYCLES = 120ull * 4194304ull;
+
+    GameBoy gb(romPath);
+    gb.serial().setEcho(false);
+    gb.cpu().setBreakOnLdBB(true);
+
+    uint64_t cycles = 0;
+    while (!gb.cpu().hitBreakpoint() && !gb.cpu().stopped() && cycles < TIMEOUT_CYCLES)
+        cycles += gb.step();
+
+    const CPU& cpu = gb.cpu();
+    const bool passed = cpu.hitBreakpoint() && cpu.b() == 3 && cpu.c() == 5 &&
+                        cpu.d() == 8 && cpu.e() == 13 && cpu.h() == 21 && cpu.l() == 34;
+
+    if (!cpu.hitBreakpoint()) {
+        std::printf("%s: %s\n", passed ? "PASS" : "FAIL",
+                    cpu.stopped() ? "CPU stopped on an illegal opcode"
+                                  : "timed out before reaching the breakpoint");
+    } else {
+        std::printf("%s: B=%u C=%u D=%u E=%u H=%u L=%u (want 3 5 8 13 21 34)\n",
+                    passed ? "PASS" : "FAIL", cpu.b(), cpu.c(), cpu.d(),
+                    cpu.e(), cpu.h(), cpu.l());
+    }
+    return passed ? EXIT_SUCCESS : EXIT_FAILURE;
+}
+
 int main(int argc, char** argv) {
+    if (argc >= 3 && std::string(argv[1]) == "--mooneye") {
+        try {
+            return runMooneye(argv[2]);
+        } catch (const std::exception& e) {
+            std::fprintf(stderr, "gbrun: %s\n", e.what());
+            return EXIT_FAILURE;
+        }
+    }
+
     if (argc < 3) {
-        std::fprintf(stderr, "usage: gbrun <rom> <frames> [out.bmp]\n");
+        std::fprintf(stderr,
+                     "usage: gbrun <rom> <frames> [out.bmp]\n"
+                     "       gbrun --mooneye <rom>\n");
         return EXIT_FAILURE;
     }
 

@@ -45,6 +45,7 @@ public:
     bool flushSave() { return m_cart.flushSave(); }
 
     const CPU& cpu() const { return m_cpu; }
+    CPU&       cpu()       { return m_cpu; }
     MMU&       mmu()       { return m_mmu; }
     Serial&    serial()    { return m_serial; }
     PPU&       ppu()       { return m_ppu; }

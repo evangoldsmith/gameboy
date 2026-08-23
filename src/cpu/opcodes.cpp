@@ -192,6 +192,10 @@ uint8_t CPU::executeInner(uint8_t op) {
         }
     };
 
+    // Mooneye's ROMs use LD B,B as a software breakpoint. It still executes
+    // normally — it is a no-op — the flag just lets a harness notice.
+    if (m_breakOnLdBB && op == 0x40) m_hitBreakpoint = true;
+
     // $40–$BF is a regular grid: LD r,r' then ALU A,r, both indexed by the low
     // three bits. $76 would be LD (HL),(HL) and is HALT instead.
     if (op >= 0x40 && op <= 0xBF && op != 0x76) {
