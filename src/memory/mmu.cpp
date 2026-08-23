@@ -44,6 +44,10 @@ void MMU::requestInterrupt(Interrupt which) {
 // reads a timer or LCD register mid-instruction sees the value hardware would
 // have produced at that point.
 void MMU::tick(uint8_t tcycles) {
+    // One DMA byte per M-cycle. tcycles is always a multiple of 4.
+    for (uint8_t done = 0; done + 4 <= tcycles; done = static_cast<uint8_t>(done + 4))
+        stepOamDma();
+
     m_timer.tick(tcycles);
     m_ppu.tick(tcycles);
     // The APU's frame sequencer runs off DIV bit 4, so the timer must advance
@@ -58,6 +62,8 @@ void MMU::tick(uint8_t tcycles) {
 }
 
 uint8_t MMU::read(uint16_t addr) {
+    if (dmaBlocks(addr)) return 0xFF;
+
     // $0000–$00FF: the boot ROM shadows cartridge ROM until it unmaps itself.
     // The cartridge header at $0100 onwards is never covered, which is how the
     // boot ROM reads the logo it is about to verify.
@@ -185,14 +191,56 @@ uint8_t MMU::readIO(uint16_t addr) {
     }
 }
 
-// Writing $XX to $FF46 copies $XX00-$XX9F into OAM. On hardware this takes 160
-// M-cycles, during which the CPU can only reach HRAM — which is why games run
-// the trigger routine from HRAM and spin there. Copying instantly is invisible
-// to that pattern; real DMA timing is a later accuracy pass.
-void MMU::oamDma(uint8_t srcHigh) {
-    const uint16_t src = static_cast<uint16_t>(static_cast<unsigned>(srcHigh) << 8);
-    for (uint16_t i = 0; i < 0xA0; ++i)
-        m_ppu.writeOam(static_cast<uint16_t>(0xFE00 + i), read(static_cast<uint16_t>(src + i)));
+// Writing $XX to $FF46 starts a copy of $XX00-$XX9F into OAM, one byte per
+// M-cycle for 160 M-cycles. Writing again while one is running restarts it.
+//
+// There is one M-cycle of setup before the first byte moves, which is what
+// makes a write to $FF46 from ordinary memory work at all: the instruction
+// doing the writing gets to finish its own fetch before the bus is taken away.
+void MMU::startOamDma(uint8_t srcHigh) {
+    m_dmaSource     = static_cast<uint16_t>(static_cast<unsigned>(srcHigh) << 8);
+    m_dmaIndex      = 0;
+    m_dmaStartDelay = 1;
+    m_dmaActive     = true;
+}
+
+void MMU::stepOamDma() {
+    if (!m_dmaActive) return;
+
+    if (m_dmaStartDelay > 0) {
+        --m_dmaStartDelay;
+        return;
+    }
+
+    // dmaRead rather than read(): the copy is not a CPU access, so it must not
+    // be blocked by the transfer it is part of.
+    const uint16_t src = static_cast<uint16_t>(m_dmaSource + m_dmaIndex);
+    m_ppu.writeOam(static_cast<uint16_t>(0xFE00 + m_dmaIndex), dmaRead(src));
+
+    if (++m_dmaIndex >= 0xA0) m_dmaActive = false;
+}
+
+// While the transfer runs the DMA controller holds the memory bus, so ROM,
+// VRAM, work RAM, cartridge RAM and OAM all read $FF. This is why games copy
+// the trigger routine into HRAM and spin there: code anywhere else would be
+// fetching $FF as it ran.
+//
+// The I/O page is *not* blocked. It lives inside the CPU rather than on the
+// bus the DMA has taken, so $FF46 itself stays readable throughout — which is
+// exactly what Mooneye's oam_dma/reg_read checks.
+bool MMU::dmaBlocks(uint16_t addr) const {
+    if (!m_dmaActive || m_dmaStartDelay > 0) return false;
+    return addr < 0xFF00;
+}
+
+// The transfer's own reads bypass the block — it is the thing holding the bus,
+// not a victim of it.
+uint8_t MMU::dmaRead(uint16_t addr) {
+    const bool wasActive = m_dmaActive;
+    m_dmaActive = false;
+    const uint8_t v = read(addr);
+    m_dmaActive = wasActive;
+    return v;
 }
 
 void MMU::writeIO(uint16_t addr, uint8_t val) {
@@ -213,7 +261,7 @@ void MMU::writeIO(uint16_t addr, uint8_t val) {
             break;
         case REG_DMA:
             m_io[REG_DMA - 0xFF00] = val;  // reads back the last source written
-            oamDma(val);
+            startOamDma(val);
             break;
         case REG_BOOT:
             // One-way latch: once the boot ROM is unmapped nothing maps it back.

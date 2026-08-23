@@ -72,4 +72,45 @@ TEST_CASE("echo RAM mirrors work RAM") {
     CHECK(gb.mmu().read(0xC100) == 0xA5);
 }
 
+TEST_CASE("OAM DMA takes 160 M-cycles rather than happening at once") {
+    GameBoy gb(g_rom.path());
+
+    // Stage a recognisable pattern in work RAM and copy it from there.
+    for (int i = 0; i < 0xA0; ++i)
+        gb.mmu().write(static_cast<uint16_t>(0xC000 + i), static_cast<uint8_t>(i));
+
+    gb.mmu().write(0xFF46, 0xC0);
+
+    // Partway through, only some of it has landed.
+    for (int i = 0; i < 40; ++i) gb.mmu().tick(4);
+    CHECK(gb.ppu().readOam(0xFE00) == 0x00);
+    CHECK(gb.ppu().readOam(0xFE9F) != 0x9F);
+
+    // 160 M-cycles plus the setup cycle is enough for all of it.
+    for (int i = 0; i < 130; ++i) gb.mmu().tick(4);
+    CHECK(gb.ppu().readOam(0xFE00) == 0x00);
+    CHECK(gb.ppu().readOam(0xFE50) == 0x50);
+    CHECK(gb.ppu().readOam(0xFE9F) == 0x9F);
+}
+
+TEST_CASE("the memory bus reads $FF while a DMA is running, but I/O does not") {
+    GameBoy gb(g_rom.path());
+    gb.mmu().write(0xC000, 0x11);
+    REQUIRE(gb.mmu().read(0xC000) == 0x11);
+
+    gb.mmu().write(0xFF46, 0xC0);
+    gb.mmu().tick(4);                       // past the setup cycle
+
+    CHECK(gb.mmu().read(0xC000) == 0xFF);   // work RAM is behind the held bus
+    CHECK(gb.mmu().read(0x0000) == 0xFF);   // so is ROM, which is why the
+                                            // trigger routine must live in HRAM
+    CHECK(gb.mmu().read(0xFF46) == 0xC0);   // I/O is inside the CPU, still live
+
+    gb.mmu().write(0xFF80, 0x22);
+    CHECK(gb.mmu().read(0xFF80) == 0x22);   // HRAM stays reachable throughout
+
+    for (int i = 0; i < 200; ++i) gb.mmu().tick(4);
+    CHECK(gb.mmu().read(0xC000) == 0x11);   // and comes back afterwards
+}
+
 TEST_SUITE_END();

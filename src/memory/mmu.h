@@ -38,7 +38,10 @@ public:
 private:
     uint8_t readIO(uint16_t addr);
     void    writeIO(uint16_t addr, uint8_t val);
-    void    oamDma(uint8_t srcHigh);
+    void    startOamDma(uint8_t srcHigh);
+    void    stepOamDma();
+    bool    dmaBlocks(uint16_t addr) const;
+    uint8_t dmaRead(uint16_t addr);
     void    requestInterrupt(Interrupt which);
 
     Cartridge& m_cart;
@@ -56,6 +59,15 @@ private:
 
     std::vector<uint8_t> m_bootRom;
     bool                 m_bootActive{};
+
+    // ── OAM DMA ──────────────────────────────────────────────────────────────
+    // The transfer copies one byte per M-cycle for 160 M-cycles. While it runs
+    // the CPU can only reach HRAM, which is why games run the trigger routine
+    // from there and spin until it finishes.
+    bool     m_dmaActive{};
+    uint16_t m_dmaSource{};
+    int      m_dmaIndex{};       // next byte to copy, 0-159
+    int      m_dmaStartDelay{};  // one M-cycle of setup before the first byte
 };
 
 #endif // MMU_H

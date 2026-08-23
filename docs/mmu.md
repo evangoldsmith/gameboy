@@ -139,12 +139,21 @@ for (uint16_t i = 0; i < 0xA0; ++i)
     m_ppu.writeOam(0xFE00 + i, read(src + i));
 ```
 
-On hardware the copy takes 160 M-cycles, during which the CPU can only reach
-HRAM. Games therefore copy a small trigger routine into HRAM and spin there
-until it finishes. **Copying instantly is invisible to that pattern** — the
-routine still runs, it just waits on an already-completed transfer — so games
-work correctly. Real DMA timing, and blocking non-HRAM access during it, is a
-later accuracy pass.
+The copy takes **160 M-cycles, one byte each**, after a single M-cycle of setup.
+That setup cycle is what lets an instruction write `$FF46` from ordinary memory
+at all: it finishes its own fetch before the bus is taken away.
+
+While the transfer runs the DMA controller holds the memory bus, so ROM, VRAM,
+work RAM, cartridge RAM and OAM all read `$FF`. This is why games copy a trigger
+routine into HRAM and spin there — code anywhere else would be fetching `$FF` as
+it ran.
+
+**The I/O page is not blocked.** It lives inside the CPU rather than on the bus
+the DMA has taken, so `$FF46` itself stays readable throughout, which is what
+Mooneye's `oam_dma/reg_read` checks. Blocking it fails that test.
+
+The transfer's own reads go through `dmaRead()`, which lifts the block for the
+duration of one access — it is the thing holding the bus, not a victim of it.
 
 IF reads back with bits 5–7 set because those bits do not exist in hardware and
 always read as 1. Some test ROMs check this.
@@ -156,8 +165,14 @@ currently have a live component behind them.
 
 ## Not implemented yet
 
-- **OAM DMA is instantaneous** rather than taking 160 M-cycles, and does not
-  restrict the CPU to HRAM while it runs.
+- **OAM DMA start timing is not cycle-exact.** The transfer takes the right
+  number of cycles and blocks the right regions, but Mooneye's `oam_dma_start`,
+  `oam_dma_timing`, `oam_dma_restart` and `oam_dma/sources` all still fail:
+  they measure exactly which M-cycle the first byte moves on relative to the
+  write that started it. Sweeping the setup delay across 0, 1 and 2 changed
+  none of them, so the remaining difference is structural rather than a
+  constant — most likely the phase between the CPU's own M-cycle and the
+  transfer's.
 - **No access restrictions.** VRAM and OAM are readable at all times; hardware
   blocks them during PPU modes 2 and 3.
 - **The APU's wave-RAM access window is approximate** — see [apu.md](apu.md).
