@@ -84,6 +84,7 @@ if(GB_BUILD_TESTS)
         tests/unit/test_joypad.cpp
         tests/unit/test_apu_channels.cpp
         tests/unit/test_cartridge.cpp
+        tests/unit/test_mmu.cpp
     )
     target_link_libraries(unit_tests PRIVATE gameboy_core)
     target_include_directories(unit_tests PRIVATE ${doctest_SOURCE_DIR})

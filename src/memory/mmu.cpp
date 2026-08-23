@@ -162,8 +162,10 @@ void MMU::write(uint16_t addr, uint8_t val) {
 }
 
 // ── I/O dispatch ─────────────────────────────────────────────────────────────
-// Registers not listed here fall through to the flat array, which is fine for
-// anything nothing reacts to yet.
+// Only registers a component actually implements are served here. Everything
+// else in $FF00-$FF7F either does not exist on a DMG or is CGB-only, and reads
+// as $FF — falling through to a zero-filled array instead would report every
+// unused register as $00, which is what Mooneye's unused_hwio checks.
 
 uint8_t MMU::readIO(uint16_t addr) {
     switch (addr) {
@@ -175,10 +177,11 @@ uint8_t MMU::readIO(uint16_t addr) {
         case REG_TMA:  return m_timer.tma();
         case REG_TAC:  return m_timer.tac();
         case REG_IF:   return static_cast<uint8_t>(m_io[REG_IF - 0xFF00] | 0xE0);
+        case REG_DMA:  return m_io[REG_DMA - 0xFF00];  // reads back its source
         default:
             if (isPpuReg(addr)) return m_ppu.readReg(addr);
             if (isApuReg(addr)) return m_apu.readReg(addr);
-            return m_io[addr - 0xFF00];
+            return 0xFF;  // unimplemented or CGB-only on a DMG
     }
 }
 
@@ -201,6 +204,13 @@ void MMU::writeIO(uint16_t addr, uint8_t val) {
         case REG_TIMA: m_timer.writeTima(val); break;
         case REG_TMA:  m_timer.writeTma(val);  break;
         case REG_TAC:  m_timer.writeTac(val);  break;
+        case REG_IF:
+            // IF is stored here rather than owned by a component, and used to
+            // reach m_io through the default branch. Now that unhandled writes
+            // are dropped it needs saying explicitly, or raising an interrupt
+            // from software silently does nothing.
+            m_io[REG_IF - 0xFF00] = val;
+            break;
         case REG_DMA:
             m_io[REG_DMA - 0xFF00] = val;  // reads back the last source written
             oamDma(val);
@@ -213,7 +223,7 @@ void MMU::writeIO(uint16_t addr, uint8_t val) {
         default:
             if (isPpuReg(addr))      m_ppu.writeReg(addr, val);
             else if (isApuReg(addr)) m_apu.writeReg(addr, val);
-            else                     m_io[addr - 0xFF00] = val;
+            // Writes to registers that do not exist are simply dropped.
             break;
     }
 }

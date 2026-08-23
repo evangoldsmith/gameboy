@@ -70,9 +70,16 @@ which matches hardware.
 
 ## I/O dispatch
 
-`readIO`/`writeIO` special-case the registers a component reacts to. Anything
-not listed falls through to `m_io`, a flat 128-byte array — correct for
-registers nothing responds to yet.
+`readIO`/`writeIO` serve only the registers something actually implements.
+Anything else in `$FF00–$FF7F` either does not exist on a DMG or is CGB-only,
+and **reads as `$FF`**; writes to it are dropped. Falling through to a
+zero-filled array instead reports every unused register as `$00`, which is what
+Mooneye's `unused_hwio` checks.
+
+Only three registers live in `m_io` rather than in a component: `IF`, the DMA
+source byte, and the boot latch. `IF` needs an explicit *write* case for that
+reason — without one, raising an interrupt from software silently does nothing,
+which breaks Blargg's `02-interrupts` and very little else.
 
 | Register | Read | Write |
 |---|---|---|
