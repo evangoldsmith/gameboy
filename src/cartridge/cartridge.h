@@ -56,6 +56,8 @@ private:
     std::size_t lowBank() const;
     // Bank feeding $4000–$7FFF.
     std::size_t highBank() const;
+    // Bank feeding $A000–$BFFF. MBC1 only reaches RAM banks in mode 1.
+    std::size_t ramBank() const;
 
     uint8_t readRam(uint16_t addr) const;
     void    writeRam(uint16_t addr, uint8_t val);

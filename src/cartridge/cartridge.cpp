@@ -173,6 +173,15 @@ std::size_t Cartridge::highBank() const {
     return static_cast<std::size_t>(m_romBank) % romBankCount();
 }
 
+// MBC1's secondary register is shared between upper ROM bits and RAM banking,
+// and the mode flag decides which it drives. In the default mode RAM is always
+// bank 0 no matter what was written there — so a 32 KB cartridge cannot reach
+// its upper banks until the game switches modes.
+std::size_t Cartridge::ramBank() const {
+    if (m_header.mbcType == MBCType::MBC1 && !m_mode1) return 0;
+    return m_ramBank;
+}
+
 uint8_t Cartridge::read(uint16_t addr) const {
     if (addr < 0x4000)
         return romByte(lowBank() * 0x4000 + addr);
@@ -204,7 +213,7 @@ uint8_t Cartridge::readRam(uint16_t addr) const {
     }
 
     const std::size_t off =
-        (static_cast<std::size_t>(m_ramBank) * 0x2000 + (addr - 0xA000)) % m_ram.size();
+        (ramBank() * 0x2000 + (addr - 0xA000)) % m_ram.size();
     return m_ram[off];
 }
 
@@ -225,7 +234,7 @@ void Cartridge::writeRam(uint16_t addr, uint8_t val) {
     }
 
     const std::size_t off =
-        (static_cast<std::size_t>(m_ramBank) * 0x2000 + (addr - 0xA000)) % m_ram.size();
+        (ramBank() * 0x2000 + (addr - 0xA000)) % m_ram.size();
     m_ram[off] = val;
     m_ramDirty = true;
 }

@@ -75,6 +75,12 @@ The write-0-becomes-1 quirk is why MBC1 cannot reach banks `$20`, `$40` and
 `$60` in the default mode: their low five bits are zero, so they alias to `$21`,
 `$41`, `$61`. Mode 1 is the workaround, remapping the low ROM window instead.
 
+**The mode flag decides what the secondary register drives.** In the default
+mode it supplies upper ROM bits only, and RAM is always bank 0 no matter what
+was written there — so a 32 KB cartridge cannot reach its upper RAM banks until
+the game switches modes. In mode 1 it drives RAM banking and the low ROM window
+instead. `ramBank()` and `lowBank()` are where that distinction lives.
+
 ### MBC2
 
 The smallest mapper, and the only one where **bit 8 of the address** picks the
@@ -184,7 +190,9 @@ normal play.
   Pokémon Red is `MBC3+RAM+BATTERY` with no timer, so it is unaffected; Gold and
   Silver would not be. The RTC is also not written to the `.sav` file, which
   real cartridges do persist.
-- **MBC2 is untested** — no MBC2 ROM is available to check it against.
+- **MBC1 multicart wiring** is not detected. Those compilation cartridges wire
+  the bank register differently, and identifying them takes a heuristic;
+  Mooneye's `multicart_rom_8Mb` is the only remaining MBC failure.
 - **No `std::variant` dispatch.** `roadmap.md` suggests modelling the mapper as
   `std::variant<NoMBC, MBC1, …>` with `std::visit`; this is a switch over an
   enum instead.
