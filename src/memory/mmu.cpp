@@ -111,6 +111,12 @@ uint8_t MMU::read(uint16_t addr) {
 }
 
 void MMU::write(uint16_t addr, uint8_t val) {
+    // The DMA holds the bus for writes just as much as for reads — a store to
+    // OAM or work RAM mid-transfer is simply lost. Mooneye's push_timing is
+    // what catches this: it pushes onto a stack pointing into OAM and expects
+    // the high byte to vanish while the low byte lands.
+    if (dmaBlocks(addr)) return;
+
     // $0000–$7FFF: Cartridge (MBC register writes)
     if (addr < 0x8000) {
         m_cart.write(addr, val);
@@ -191,24 +197,40 @@ uint8_t MMU::readIO(uint16_t addr) {
     }
 }
 
-// Writing $XX to $FF46 starts a copy of $XX00-$XX9F into OAM, one byte per
-// M-cycle for 160 M-cycles. Writing again while one is running restarts it.
+// Writing $XX to $FF46 schedules a copy of $XX00-$XX9F into OAM, one byte per
+// M-cycle for 160 M-cycles. The transfer does not begin at once:
 //
-// There is one M-cycle of setup before the first byte moves, which is what
-// makes a write to $FF46 from ordinary memory work at all: the instruction
-// doing the writing gets to finish its own fetch before the bus is taken away.
+//   M = 0   the write to $FF46 happens
+//   M = 1   nothing yet — OAM is still accessible
+//   M = 2   the transfer starts and OAM begins reading $FF
+//
+// Writing again while one is running restarts it on the same schedule, and
+// crucially the *previous* transfer keeps running through M=0 and M=1 rather
+// than stopping at the write. Without that, a restart would briefly expose OAM
+// that hardware keeps hidden.
 void MMU::startOamDma(uint8_t srcHigh) {
-    m_dmaSource     = static_cast<uint16_t>(static_cast<unsigned>(srcHigh) << 8);
-    m_dmaIndex      = 0;
-    m_dmaStartDelay = 1;
-    m_dmaActive     = true;
+    m_dmaPendingSource = static_cast<uint16_t>(static_cast<unsigned>(srcHigh) << 8);
+    m_dmaStartDelay    = 2;
+    m_dmaPending       = true;
 }
 
 void MMU::stepOamDma() {
+    if (m_dmaPending && --m_dmaStartDelay == 0) {
+        m_dmaPending = false;
+        m_dmaActive  = true;
+        m_dmaSource  = m_dmaPendingSource;
+        m_dmaIndex   = 0;
+    }
+
     if (!m_dmaActive) return;
 
-    if (m_dmaStartDelay > 0) {
-        --m_dmaStartDelay;
+    // The transfer is released at the *start* of the M-cycle after the last
+    // byte moves, not the instant it moves. Within one M-cycle the CPU ticks
+    // before it accesses memory, so clearing the flag straight after the final
+    // copy would make OAM readable on the very cycle that copy happened — one
+    // cycle early, which is exactly what oam_dma_timing measures.
+    if (m_dmaIndex >= 0xA0) {
+        m_dmaActive = false;
         return;
     }
 
@@ -216,8 +238,7 @@ void MMU::stepOamDma() {
     // be blocked by the transfer it is part of.
     const uint16_t src = static_cast<uint16_t>(m_dmaSource + m_dmaIndex);
     m_ppu.writeOam(static_cast<uint16_t>(0xFE00 + m_dmaIndex), dmaRead(src));
-
-    if (++m_dmaIndex >= 0xA0) m_dmaActive = false;
+    ++m_dmaIndex;
 }
 
 // While the transfer runs the DMA controller holds the memory bus, so ROM,
@@ -229,7 +250,7 @@ void MMU::stepOamDma() {
 // bus the DMA has taken, so $FF46 itself stays readable throughout — which is
 // exactly what Mooneye's oam_dma/reg_read checks.
 bool MMU::dmaBlocks(uint16_t addr) const {
-    if (!m_dmaActive || m_dmaStartDelay > 0) return false;
+    if (!m_dmaActive) return false;   // a merely pending transfer blocks nothing
     return addr < 0xFF00;
 }
 

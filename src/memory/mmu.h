@@ -64,10 +64,16 @@ private:
     // The transfer copies one byte per M-cycle for 160 M-cycles. While it runs
     // the CPU can only reach HRAM, which is why games run the trigger routine
     // from there and spin until it finishes.
-    bool     m_dmaActive{};
+    bool     m_dmaActive{};      // a transfer is moving bytes right now
     uint16_t m_dmaSource{};
     int      m_dmaIndex{};       // next byte to copy, 0-159
-    int      m_dmaStartDelay{};  // one M-cycle of setup before the first byte
+
+    // A write to $FF46 does not start the transfer immediately: it schedules
+    // one two M-cycles out. Any transfer already running keeps going in the
+    // meantime, so a restart does not create a gap where OAM is readable.
+    bool     m_dmaPending{};
+    uint16_t m_dmaPendingSource{};
+    int      m_dmaStartDelay{};
 };
 
 #endif // MMU_H

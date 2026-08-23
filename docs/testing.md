@@ -126,7 +126,7 @@ a gain being lost again later.
 | `dmg-acid2` | yes | pass, pixel-exact |
 | `dmg_sound` | no | 9/12 — wave-RAM access window |
 | `oam_bug` | no | 2/8 — deferred, see `roadmap.md` |
-| Mooneye `acceptance` | baseline | 32/66 |
+| Mooneye `acceptance` | baseline | 40/66 |
 | Mooneye `emulator-only` | baseline | 25/28 (MBC tests) |
 
 ### What the Mooneye failures say
@@ -136,9 +136,9 @@ records:
 
 | Cluster | Tests | Cause |
 |---|---|---|
-| Instruction timing (`call`, `jp`, `ret`, `rst`, `push`, `add_sp`) | 12 | Which M-cycle *within* an instruction each access lands on. `mem_timing` passes, so this is a finer distinction than that suite makes |
+| Instruction timing (`call`, `jp`, `ret`, `add_sp`, `ld_hl_sp`) | 7 | These use OAM DMA as a clock and read their operands from OAM, so what remains is which regions a transfer can source from — not instruction timing as such |
 | PPU timing (`intr_2_*`, `lcdon_*`, `stat_lyc_onoff`, `hblank_ly_scx`) | 9 | Fixed mode 3 length and imprecise mode transitions — see [ppu.md](ppu.md) |
-| OAM DMA (`oam_dma_*`, `sources`) | 4 | The copy is instantaneous rather than 160 M-cycles — see [mmu.md](mmu.md) |
+| OAM DMA (`sources`) | 1 | `$FEA0–$FEFF` is modelled as flat `$FF` — see [mmu.md](mmu.md) |
 | Timer (`rapid_toggle`, `tima_write_reloading`, `tma_write_reloading`) | 3 | Sub-M-cycle write timing — see [timer.md](timer.md) |
 | MBC1 (`bits_mode`, `ram_256kb`) | 2 | MBC1 mode 1 banking is unimplemented — see [cartridge.md](cartridge.md) |
 

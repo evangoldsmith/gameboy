@@ -139,12 +139,29 @@ for (uint16_t i = 0; i < 0xA0; ++i)
     m_ppu.writeOam(0xFE00 + i, read(src + i));
 ```
 
-The copy takes **160 M-cycles, one byte each**, after a single M-cycle of setup.
-That setup cycle is what lets an instruction write `$FF46` from ordinary memory
-at all: it finishes its own fetch before the bus is taken away.
+A write to `$FF46` does not start the transfer — it *schedules* one:
+
+```
+M = 0   the write to $FF46 happens
+M = 1   nothing yet; OAM is still accessible
+M = 2   the transfer starts and the bus goes away
+```
+
+Writing again while one is running restarts it on the same schedule, and the
+**previous transfer keeps running through M=0 and M=1** rather than stopping at
+the write. Without that a restart would briefly expose OAM that hardware keeps
+hidden.
+
+The copy itself is **160 M-cycles, one byte each**. The bus is released at the
+start of the M-cycle *after* the last byte moves, not the instant it moves:
+within one M-cycle the CPU ticks before it accesses memory, so releasing
+immediately would make OAM readable on the very cycle the final copy happened.
+One cycle early, and `oam_dma_timing` measures exactly that.
 
 While the transfer runs the DMA controller holds the memory bus, so ROM, VRAM,
-work RAM, cartridge RAM and OAM all read `$FF`. This is why games copy a trigger
+work RAM, cartridge RAM and OAM all read `$FF` — and **writes to them are
+dropped**, which is what `push_timing` catches: it pushes onto a stack pointing
+into OAM and expects the high byte to vanish while the low byte lands. This is why games copy a trigger
 routine into HRAM and spin there — code anywhere else would be fetching `$FF` as
 it ran.
 
@@ -165,14 +182,9 @@ currently have a live component behind them.
 
 ## Not implemented yet
 
-- **OAM DMA start timing is not cycle-exact.** The transfer takes the right
-  number of cycles and blocks the right regions, but Mooneye's `oam_dma_start`,
-  `oam_dma_timing`, `oam_dma_restart` and `oam_dma/sources` all still fail:
-  they measure exactly which M-cycle the first byte moves on relative to the
-  write that started it. Sweeping the setup delay across 0, 1 and 2 changed
-  none of them, so the remaining difference is structural rather than a
-  constant — most likely the phase between the CPU's own M-cycle and the
-  transfer's.
+- **`oam_dma/sources` still fails.** Which regions a transfer can read from is
+  not fully modelled; `$FEA0–$FEFF` in particular is treated as a flat `$FF`,
+  and Mooneye's `jp_timing` shows hardware returning something else there.
 - **No access restrictions.** VRAM and OAM are readable at all times; hardware
   blocks them during PPU modes 2 and 3.
 - **The APU's wave-RAM access window is approximate** — see [apu.md](apu.md).
