@@ -1,9 +1,56 @@
 # Testing and CI
 
-**Source:** `tests/gbrun.cpp`, `tests/run_tests.py`, `.github/workflows/ci.yml`
+**Source:** `tests/unit/`, `tests/gbrun.cpp`, `tests/run_tests.py`,
+`.github/workflows/ci.yml`
 
-Every change runs through GitHub Actions: it must **build in both
-configurations without warnings**, and only then are the test ROMs run.
+Every change runs through GitHub Actions in three stages: it must **build in
+both configurations without warnings**, then the **unit tests** must pass, and
+only then are the **test ROMs** run.
+
+Unit tests come before the ROMs deliberately — they need no downloads, finish in
+milliseconds, and a failure in them points at one component rather than at a
+screenful of pixels.
+
+## Unit tests
+
+`tests/unit/` covers components in isolation using
+[doctest](https://github.com/doctest/doctest), fetched at configure time rather
+than vendored so nothing third-party lives in the tree. It is header-only, so
+CMake fetches the source without configuring it — its own `CMakeLists.txt`
+declares a minimum below what CMake 4 accepts.
+
+```bash
+make test                             # builds debug, then runs them
+make test TEST_ARGS="-ts=timer"       # one suite: timer, joypad, apu, cartridge
+```
+
+The binary is a **debug-build artefact only**. Release is what ships, so it does
+not pay to compile a test binary — nor to fetch a test framework at configure
+time, which would otherwise make a release build require the network. Pass
+`-DGB_BUILD_TESTS=ON` to build them in a release tree anyway.
+
+What is covered, and why those pieces:
+
+| File | Covers |
+|---|---|
+| `test_timer.cpp` | DIV rate and the full-counter reset, all four TIMA rates, the three ways an unrelated write ticks TIMA, the overflow reload delay and its cancellation |
+| `test_joypad.cpp` | The active-low matrix, row selection and both/neither rows, interrupt on press but not release |
+| `test_apu_channels.cpp` | Envelope period-0 and clamping, sequencer edge behaviour, duty output, length counter, sweep overflow, the noise LFSR's 127-step repeat in 7-bit mode, wave RAM surviving power-off |
+| `test_cartridge.cpp` | Bank arithmetic for all four mappers, including MBC3's RAM-bank register not disturbing the ROM bank |
+
+These target the logic that end-to-end ROMs exercise only indirectly, and
+several encode bugs that actually happened: the joypad's active-low polarity
+deadlocked Tetris, and MBC3's RAM-bank register once sent Pokémon Red into the
+wrong bank.
+
+Writing them found three bugs — all in the tests rather than the emulator, which
+is itself worth knowing. The most instructive: `NRx2 & 0xF8` reaches down to
+**bit 3**, so a channel with zero volume but the direction bit set still has a
+live DAC. Reading "the upper five bits" as "the volume nibble" is the easy
+mistake.
+
+The synthetic ROMs in `test_cartridge.cpp` fill each bank with its own bank
+number, so a single read says which bank is mapped.
 
 ## Why the ROMs are downloaded rather than committed
 

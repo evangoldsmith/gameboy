@@ -7,6 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 make debug          # Build debug version (default)
 make release        # Build optimized release version
+make test           # Build debug + run the unit tests (TEST_ARGS= passes doctest flags)
 make run            # Build debug + run (ROM=path/to/rom.gb to specify ROM)
 make run-release    # Build release + run
 make clean          # Remove build artifacts
@@ -15,6 +16,8 @@ make reconfigure    # Re-run CMake configuration
 ```
 
 Build outputs go to `build/debug/` or `build/release/`. The main binary is `build/<config>/gameboy`.
+
+The `unit_tests` binary is built **only in debug**, so release builds neither compile it nor fetch doctest.
 
 **Dependency**: SDL2 must be installed (`brew install sdl2` on macOS).
 
@@ -47,7 +50,9 @@ The `GameBoy` class in `src/gameboy.h` is the central orchestrator — it owns a
 
 **All changes go through a pull request.** Branch, push, open a PR, let CI pass, then merge. Do not commit directly to `main`.
 
-CI (`.github/workflows/ci.yml`) builds both configurations with `-Werror` and then runs the test ROMs, which it downloads from a pinned release rather than the repo. See [docs/testing.md](docs/testing.md).
+CI (`.github/workflows/ci.yml`) builds both configurations with `-Werror`, runs the unit tests in `tests/unit/`, and then runs the test ROMs, which it downloads from a pinned release rather than the repo. See [docs/testing.md](docs/testing.md).
+
+**Add a unit test when you touch component logic.** The ROM suites catch behaviour end to end but point at a screen rather than a cause; a unit test names the component.
 
 Note that CI uses GCC while local development is usually Clang; a clean local build is not proof of a clean CI build.
 
