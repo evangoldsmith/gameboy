@@ -44,6 +44,13 @@ public:
     // Set true when the CPU hits an opcode that does not exist on the SM83.
     bool stopped() const { return m_stopped; }
 
+    // ── Mooneye test-suite breakpoint ────────────────────────────────────────
+    // Mooneye ROMs signal completion by executing LD B,B ($40) and leaving the
+    // Fibonacci sequence in B,C,D,E,H,L. That opcode is a legitimate no-op a
+    // real game may execute, so trapping it is opt-in and off by default.
+    void setBreakOnLdBB(bool on) { m_breakOnLdBB = on; }
+    bool hitBreakpoint() const { return m_hitBreakpoint; }
+
 private:
     // ── 16-bit halves ────────────────────────────────────────────────────────
     static constexpr uint8_t hi(uint16_t r) { return static_cast<uint8_t>(r >> 8); }
@@ -140,6 +147,8 @@ private:
     bool m_halted{};
     bool m_haltBug{};    // HALT with IME=0 and an interrupt already pending
     bool m_stopped{};
+    bool m_breakOnLdBB{};
+    bool m_hitBreakpoint{};
 };
 
 #endif // CPU_H

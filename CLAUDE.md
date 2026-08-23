@@ -88,6 +88,8 @@ Roadmap Phases 0–11 are done. **All 11 Blargg `cpu_instrs` sub-tests pass**, *
 | `dmg_sound` | 9 / 12 |
 | `oam_bug` | 2 / 8 |
 | `mem_timing` | 3 / 3 |
+| Mooneye acceptance | 32 / 66 |
+| Mooneye emulator-only (MBC) | 25 / 28 |
 
 Per-suite breakdowns live in `docs/README.md` and the relevant component docs. Mooneye and Mealybug have not been run — they need different harnesses (register signature and screenshot comparison respectively).
 - No tests exist beyond running test ROMs.

@@ -29,6 +29,29 @@ except ImportError:
     sys.exit("run_tests.py needs Pillow:  pip install pillow")
 
 # rom path, reference screenshot, frames to run, gated, note
+# Mooneye names the models a test applies to after a hyphen; no suffix means it
+# runs anywhere. We emulate a DMG-CPU B/C, so anything targeting another
+# revision (dmg0), another model (mgb, sgb, sgb2) or CGB/AGB is not ours to
+# pass. "GS" covers the whole non-colour family, which includes DMG.
+MOONEYE_MODELS = {"", "GS", "dmgABC", "dmgABCmgb"}
+
+# Directories of the Mooneye suite that apply to a DMG, and the number of tests
+# currently expected to pass. CI fails if the count drops below this, so
+# improvements are free but regressions are caught. Raise these when tests are
+# fixed.
+# Tests currently expected to pass. CI fails if the count drops below these, so
+# improvements are free but regressions are caught. Raise them when tests start
+# passing — that is what stops the gain being lost again later.
+MOONEYE_BASELINE = {
+    "acceptance": 32,           # of 66 applicable
+    "emulator-only (MBC)": 25,  # of 28
+}
+
+MOONEYE_GROUPS = [
+    ("mooneye-test-suite/acceptance",    "acceptance"),
+    ("mooneye-test-suite/emulator-only", "emulator-only (MBC)"),
+]
+
 SUITES = [
     ("blargg/cpu_instrs/cpu_instrs.gb",   "blargg/cpu_instrs/cpu_instrs-dmg-cgb.png",   4000, True,  ""),
     ("blargg/instr_timing/instr_timing.gb","blargg/instr_timing/instr_timing-dmg-cgb.png", 500, True,  ""),
@@ -63,6 +86,48 @@ def compare(actual_path, reference_path):
     return sum(1 for x, y in zip(a, b) if x != y), len(a)
 
 
+def mooneye_applies(rom_path):
+    """True if this ROM targets the hardware we emulate."""
+    stem = rom_path.stem
+    suffix = stem.rsplit("-", 1)[1] if "-" in stem else ""
+    return suffix in MOONEYE_MODELS
+
+
+def run_mooneye(gbrun, roms, baselines):
+    """Runs the Mooneye suites. Returns (failed_group_names, results)."""
+    failures, results = [], []
+
+    for rel, label in MOONEYE_GROUPS:
+        root = roms / rel
+        if not root.is_dir():
+            print(f"{label:<24} {'DIRECTORY MISSING':<22} {rel}")
+            failures.append(label)
+            continue
+
+        applicable = sorted(r for r in root.rglob("*.gb") if mooneye_applies(r))
+        passed, failed = [], []
+        for rom in applicable:
+            proc = subprocess.run([str(gbrun), "--mooneye", str(rom)],
+                                  capture_output=True, text=True)
+            (passed if proc.returncode == 0 else failed).append(
+                (str(rom.relative_to(root)), proc.stdout.strip()))
+
+        total = len(applicable)
+        baseline = baselines.get(label)
+        status = f"{len(passed)}/{total}"
+        note = ""
+        if baseline is not None and len(passed) < baseline:
+            status += " REGRESSED"
+            note = f"baseline was {baseline}"
+            failures.append(label)
+        elif baseline is not None and len(passed) > baseline:
+            note = f"improved from {baseline} — raise the baseline"
+        print(f"{label:<24} {status:<22} {note}")
+        results.append((label, passed, failed))
+
+    return failures, results
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -70,6 +135,8 @@ def main():
     parser.add_argument("rom_dir", help="unpacked game-boy-test-roms directory")
     parser.add_argument("--out", default="test-output",
                         help="where to write each suite's result screen")
+    parser.add_argument("-v", "--verbose", action="store_true",
+                        help="list the individual Mooneye tests that failed")
     args = parser.parse_args()
 
     gbrun = Path(args.gbrun).resolve()
@@ -110,6 +177,18 @@ def main():
 
         detail = note if note else (serial[:44] if serial else "")
         print(f"{name:<24} {status:<22} {detail}")
+
+    # ── Mooneye ─────────────────────────────────────────────────────────────
+    mooneye_failures, mooneye_results = run_mooneye(gbrun, roms, MOONEYE_BASELINE)
+    failures.extend(mooneye_failures)
+
+    if args.verbose:
+        for label, _passed, failed in mooneye_results:
+            if not failed:
+                continue
+            print(f"\n  failing in {label}:")
+            for name, detail in failed:
+                print(f"    {name:<44} {detail}")
 
     print("-" * 78)
     if skipped:
