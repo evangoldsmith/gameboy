@@ -53,6 +53,36 @@ add_library(gameboy_core STATIC
 
 target_include_directories(gameboy_core PUBLIC ${PROJECT_SOURCE_DIR}/src)
 
+# ── Unit tests ─────────────────────────────────────────────────────────────────
+# doctest is a single header pulled at configure time rather than vendored. It
+# compiles fast enough that a full test binary is not a burden, and keeping it
+# out of the tree means nothing third-party lives in src/.
+include(FetchContent)
+FetchContent_Declare(
+    doctest
+    GIT_REPOSITORY https://github.com/doctest/doctest.git
+    GIT_TAG        v2.4.11
+    # doctest is header-only, and its own CMakeLists declares a minimum below
+    # what CMake 4 still accepts. Pointing SOURCE_SUBDIR at a directory that
+    # does not exist fetches the source without configuring it, which is all we
+    # need — the header is used directly via the include path below.
+    SOURCE_SUBDIR  header-only-no-cmake
+)
+FetchContent_MakeAvailable(doctest)
+
+add_executable(unit_tests
+    tests/unit/main.cpp
+    tests/unit/test_timer.cpp
+    tests/unit/test_joypad.cpp
+    tests/unit/test_apu_channels.cpp
+    tests/unit/test_cartridge.cpp
+)
+target_link_libraries(unit_tests PRIVATE gameboy_core)
+target_include_directories(unit_tests PRIVATE ${doctest_SOURCE_DIR})
+
+enable_testing()
+add_test(NAME unit_tests COMMAND unit_tests)
+
 # ── Headless test-ROM runner (no SDL) ──────────────────────────────────────────
 add_executable(gbrun tests/gbrun.cpp)
 target_link_libraries(gbrun PRIVATE gameboy_core)

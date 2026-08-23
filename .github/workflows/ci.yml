@@ -43,7 +43,11 @@ jobs:
           cmake -S . -B build/release -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS=-Werror
           cmake --build build/release --parallel
 
-      # ── Step 2: only once it builds, run the test ROMs ────────────────────
+      # ── Step 2: unit tests, which need no ROMs and fail fast ──────────────
+      - name: Unit tests
+        run: ./build/release/unit_tests
+
+      # ── Step 3: only once that passes, run the test ROMs ──────────────────
       # The repository is deliberately free of ROM files, so they are fetched
       # here instead of vendored.
       - name: Download test ROMs
