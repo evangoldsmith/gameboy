@@ -81,12 +81,13 @@ TEST_CASE("OAM DMA takes 160 M-cycles rather than happening at once") {
 
     gb.mmu().write(0xFF46, 0xC0);
 
-    // Partway through, only some of it has landed.
-    for (int i = 0; i < 40; ++i) gb.mmu().tick(4);
+    // Partway through, only some of it has landed. Two of these cycles are the
+    // scheduling delay before the transfer starts at all.
+    for (int i = 0; i < 42; ++i) gb.mmu().tick(4);
     CHECK(gb.ppu().readOam(0xFE00) == 0x00);
     CHECK(gb.ppu().readOam(0xFE9F) != 0x9F);
 
-    // 160 M-cycles plus the setup cycle is enough for all of it.
+    // 160 M-cycles plus the two scheduling cycles covers the whole transfer.
     for (int i = 0; i < 130; ++i) gb.mmu().tick(4);
     CHECK(gb.ppu().readOam(0xFE00) == 0x00);
     CHECK(gb.ppu().readOam(0xFE50) == 0x50);
@@ -99,7 +100,11 @@ TEST_CASE("the memory bus reads $FF while a DMA is running, but I/O does not") {
     REQUIRE(gb.mmu().read(0xC000) == 0x11);
 
     gb.mmu().write(0xFF46, 0xC0);
-    gb.mmu().tick(4);                       // past the setup cycle
+    // The transfer starts two M-cycles after the write, not immediately, so
+    // OAM and the bus stay readable until then.
+    CHECK(gb.mmu().read(0xC000) == 0x11);
+    gb.mmu().tick(4);
+    gb.mmu().tick(4);                       // now it is running
 
     CHECK(gb.mmu().read(0xC000) == 0xFF);   // work RAM is behind the held bus
     CHECK(gb.mmu().read(0x0000) == 0xFF);   // so is ROM, which is why the

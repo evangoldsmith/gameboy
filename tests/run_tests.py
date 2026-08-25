@@ -43,7 +43,7 @@ MOONEYE_MODELS = {"", "GS", "dmgABC", "dmgABCmgb"}
 # improvements are free but regressions are caught. Raise them when tests start
 # passing — that is what stops the gain being lost again later.
 MOONEYE_BASELINE = {
-    "acceptance": 33,           # of 66 applicable
+    "acceptance": 40,           # of 66 applicable
     "emulator-only (MBC)": 27,  # of 28
 }
 
